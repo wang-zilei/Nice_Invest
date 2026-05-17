@@ -593,7 +593,7 @@ WORKSPACE_CLOSE = "</div></div>"
 # ============================================================
 # Gradio 界面
 # ============================================================
-with gr.Blocks(title="智能金融分析平台", css=CUSTOM_CSS) as app:
+with gr.Blocks(title="智能金融分析平台") as app:
 
     # ---- Hero ----
     gr.HTML(HERO_HTML)
@@ -694,4 +694,4 @@ if __name__ == "__main__":
     print("  智能金融分析平台")
     print("  http://localhost:7860")
     print("=" * 60)
-    app.launch(server_port=7860, share=False)
+    app.launch(css=CUSTOM_CSS, server_port=7860, share=False)
