@@ -12,11 +12,16 @@ from langgraph.types import Send
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 import json
+import os
 import traceback
 
 from src.state import AnalysisState
 from src.mcp_tools.tushare_api import get_stock_basic
-from config import DEFAULT_MODEL
+
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "deepseek-chat")
 
 
 # ============================================================
@@ -32,12 +37,16 @@ def get_llm(model: str = None):
     优先读取 os.environ（由 server.py _apply_llm_config 动态设置），
     回退到 config.py 静态值。这确保用户自备 Key / 体验 Key 能正确注入。
     """
-    import os
-    from config import (
-        OPENAI_API_KEY as _CFG_OPENAI_KEY, OPENAI_BASE_URL as _CFG_OPENAI_URL,
-        DEEPSEEK_API_KEY as _CFG_DEEPSEEK_KEY, DEEPSEEK_BASE_URL as _CFG_DEEPSEEK_URL,
-        QWEN_API_KEY as _CFG_QWEN_KEY, QWEN_BASE_URL as _CFG_QWEN_URL,
-    )
+    try:
+        from config import (
+            OPENAI_API_KEY as _CFG_OPENAI_KEY, OPENAI_BASE_URL as _CFG_OPENAI_URL,
+            DEEPSEEK_API_KEY as _CFG_DEEPSEEK_KEY, DEEPSEEK_BASE_URL as _CFG_DEEPSEEK_URL,
+            QWEN_API_KEY as _CFG_QWEN_KEY, QWEN_BASE_URL as _CFG_QWEN_URL,
+        )
+    except ImportError:
+        _CFG_OPENAI_KEY = _CFG_OPENAI_URL = ""
+        _CFG_DEEPSEEK_KEY = _CFG_DEEPSEEK_URL = ""
+        _CFG_QWEN_KEY = _CFG_QWEN_URL = ""
 
     # 优先从环境变量读取（server.py _apply_llm_config 会动态设置）
     openai_key = os.environ.get("OPENAI_API_KEY", "") or _CFG_OPENAI_KEY

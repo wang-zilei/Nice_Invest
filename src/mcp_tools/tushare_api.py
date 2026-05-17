@@ -7,7 +7,11 @@ import time
 import tushare as ts
 import pandas as pd
 from datetime import datetime, timedelta
-from config import TUSHARE_TOKEN
+
+try:
+    from config import TUSHARE_TOKEN
+except ImportError:
+    TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
 
 # 初始化 Tushare Pro
 _pro = None

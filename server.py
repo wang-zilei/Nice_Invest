@@ -817,7 +817,12 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         # 用户没有自备 Key，检查体验 Key 余量
         usage = user_store.get_usage(user_email)
         if usage < MAX_FREE_USES:
-            from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
+            try:
+                from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
+            except ImportError:
+                DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
+                DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+                DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
             os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
             os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
             os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL
@@ -832,7 +837,12 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
             )
     else:
         # 无 session，按体验 Key 处理
-        from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
+        try:
+            from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
+        except ImportError:
+            DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
+            DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+            DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
         os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
         os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
         os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL

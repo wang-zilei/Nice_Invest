@@ -9,11 +9,16 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
+import os
 from datetime import datetime
 
 from src.graph import build_graph
 from src.state import AnalysisState
-from config import DEFAULT_MODEL
+
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "deepseek-chat")
 
 
 # 初始化 LangGraph 图
