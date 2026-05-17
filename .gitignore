@@ -40,6 +40,7 @@ env/
 .DS_Store
 Thumbs.db
 .codebuddy/
+.claude/
 .workbuddy/
 
 # ============================================================
