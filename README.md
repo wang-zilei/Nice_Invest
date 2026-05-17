@@ -1,6 +1,5 @@
 # 基于 LangGraph 的金融分析 Multi-Agent 系统
 
-> 腾讯金融大模型评测实习生 · 项目制作品
 
 ## 简介
 
@@ -10,7 +9,7 @@
 - **Summary Agent（ReAct 模式）**：交叉验证 + 数据一致性核实 + 加权综合评分
 - **评判 Agent 多模型对比**：GPT-4o / DeepSeek / Qwen 横向评测（内部工具）
 - **React 19 前端 + FastAPI 后端 + SSE 流式推送**：3 页 SPA（Landing → 分析工作台 → 研报）
-- **两段式输出**：Markdown 正文（人读）+ JSON 代码块（前端渲染）
+- **两段式输出**：Markdown 正文+ JSON 代码块（前端渲染）
 
 ## 快速开始
 
