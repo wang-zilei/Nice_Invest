@@ -105,7 +105,7 @@ analysis_history: list = []
 # ============================================================
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": "0.2.1"}
 
 
 # ============================================================
