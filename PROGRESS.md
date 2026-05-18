@@ -83,7 +83,7 @@
 ✅ **阶段九（2026-05-18）**：输出格式清洗 + 数据源优先级反转 + 前端结构化展示 + 历史缓存修复 + 股票名称显示修复 + Markdown符号去除 + 报告UI修复 + 报告页布局重排/####清洗/仿宋二级标题/字号升级/关键指标颜色加深
 ✅ **搜索重构 + A股安全护栏（2026-05-18）**：A股注册表（akshare 5517只）+ 搜索框确认按钮 + /api/validate-stock 校验端点 + LLM 模糊识别兜底 + 非A股警告弹窗
 ✅ **阶段十：GitHub 发布 + Railway 部署（2026-05-18）**：前后端合一部署、config 导入修复、Gradio 6.0 兼容、页面标题修复、黑屏修复
-⬜ 下一步：体验 Key 问题排查
+✅ **阶段十补充：体验 Key 环境变量注入修复（2026-05-18）**：_apply_llm_config 全量设置 DEEPSEEK_BASE_URL/QWEN_BASE_URL，auth.py 清理次数限制死代码，Dashboard demoModel 未定义修复
 ⬜ 下一步：面试资产整理
 
 ### 阶段十：GitHub 发布 + Railway 部署（2026-05-18）
@@ -99,7 +99,7 @@
 | 10.7 | Procfile 入口指定 | ✅ | `web: python server.py`，防止 Railway 误用 main.py |
 | 10.8 | 页面标题修改 | ✅ | `index.html` 标题 "My Google AI Studio App" → "Nice Invest" |
 | 10.9 | 黑屏修复（landing.html 缺失） | ✅ | 重新构建，Vite 从 `public/` 复制 `landing.html` 到 `dist/` |
-| 10.10 | 体验 Key 线上不生效 | ⬜ | 待排查：疑似 DeepSeek API Key 余额耗尽（402），需查看 Railway 日志确认 |
+| 10.10 | 体验 Key 线上不生效 | ✅ | **已修复（2026-05-18）**：`_apply_llm_config` 只设置了 `OPENAI_BASE_URL` 但未设 `DEEPSEEK_BASE_URL`，`get_llm()` 中 deepseek 分支读取 `DEEPSEEK_BASE_URL` 为空导致 API 调用失败。现统一设置所有模型族 env var。同时清理 auth.py 次数限制死代码、修复 Dashboard `demoModel` 未定义 |
 
 **部署 Bug 汇总**：
 
@@ -108,7 +108,7 @@
 | B9: ModuleNotFoundError | Railway 启动崩溃 | `config.py` 被 gitignore，线上无此文件，`import config` 直接抛异常 | 5 模块全部 try/except + os.environ 兜底 |
 | B10: Gradio 6.0 IndexError | 持续重启循环 | Railway 自动检测 `main.py` 为入口，Gradio 6.0 Blocks() 不接受 css 参数 | ① css 移至 launch() ② 新增 Procfile 指定 `server.py` |
 | B11: Landing 黑屏 | 页面全黑，仅能盲点进入 | `web/dist/landing.html` 被清理后未重新构建（iframe 加载 404） | 清理 dist 后完整 rebuild，Vite 从 public/ 复制 |
-| B12: 体验 Key 不生效 | 免费体验 2 次无法使用 | 待确认：疑似 DeepSeek 体验 Key 余额耗尽（402 Insufficient Balance） | 待排查 |
+| B12: 体验 Key 不生效 | 免费体验无法使用，分析失败 | `_apply_llm_config` 只设 `OPENAI_BASE_URL`，未设 `DEEPSEEK_BASE_URL`；`get_llm()` deepseek 分支读空 base_url 导致 API 调用失败 | 同时设置 OPENAI/DEEPSEEK/QWEN 三组环境变量 + 清理 auth.py 次数限制死代码 |
 | B13: 页面标题错误 | 标签页显示 "My Google AI Studio App" | index.html title 未修改 | 改为 "Nice Invest" |
 
 ### 阶段九补充：Markdown 符号去除与 UI 修复（2026-05-18 本会话）

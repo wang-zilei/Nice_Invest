@@ -80,12 +80,10 @@ def print_startup_summary():
     from src.auth import user_store
 
     total_users = user_store.total_users
-    total_analyses = user_store.total_analyses
 
     logger.info("=" * 50)
     logger.info("Nice Invest API v0.2.0 启动")
     logger.info(f"  监听地址: http://0.0.0.0:8000")
     logger.info(f"  日志文件: {LOG_FILE}")
     logger.info(f"  累计注册用户: {total_users}")
-    logger.info(f"  累计分析次数: {total_analyses}")
     logger.info("=" * 50)

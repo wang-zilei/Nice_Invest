@@ -760,7 +760,12 @@ async def _preflight_check() -> tuple:
 
 
 def _apply_llm_config(llm_config: dict, user_email: str = None):
-    """将 LLM 配置写入环境变量。用户自备 Key 优先，否则使用后端体验 Key。"""
+    """将 LLM 配置写入环境变量。用户自备 Key 优先，否则使用后端体验 Key。
+
+    关键：必须同时设置所有模型族的环境变量（OPENAI/DEEPSEEK/QWEN），
+    因为 get_llm() 中不同模型分支读取各自的 env var。
+    线上无 config.py 兜底，漏设任何一个 base_url 都会导致 Agent 执行失败。
+    """
     api_key = llm_config.get("api_key") or llm_config.get("openai_api_key")
     base_url = llm_config.get("base_url") or llm_config.get("openai_base_url")
     model = llm_config.get("model", "deepseek-chat")
@@ -768,17 +773,24 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
         os.environ["DEEPSEEK_API_KEY"] = api_key
+        os.environ["QWEN_API_KEY"] = api_key
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
     else:
         demo_key = os.environ.get("DEMO_API_KEY", "")
         os.environ["OPENAI_API_KEY"] = demo_key
         os.environ["DEEPSEEK_API_KEY"] = demo_key
+        os.environ["QWEN_API_KEY"] = demo_key
         logger.info(f"[CONFIG] 使用体验 Key → model={model}")
 
     if base_url:
         os.environ["OPENAI_BASE_URL"] = base_url
+        os.environ["DEEPSEEK_BASE_URL"] = base_url
+        os.environ["QWEN_BASE_URL"] = base_url
     else:
-        os.environ["OPENAI_BASE_URL"] = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+        default_url = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+        os.environ["OPENAI_BASE_URL"] = default_url
+        os.environ["DEEPSEEK_BASE_URL"] = default_url
+        os.environ["QWEN_BASE_URL"] = default_url
     os.environ["DEFAULT_MODEL"] = model
 
 

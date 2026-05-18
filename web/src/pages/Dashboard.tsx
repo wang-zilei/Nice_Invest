@@ -986,7 +986,7 @@ function ConfigPanel({
           <div>
             <label className="block text-[13px] font-medium text-[#403d39] mb-1">模型</label>
             <select
-              value={draft.llm?.model || demoModel}
+              value={draft.llm?.model || "deepseek-chat"}
               onChange={(e) =>
                 onDraftChange({ ...draft, llm: { ...draft.llm, model: e.target.value } })
               }

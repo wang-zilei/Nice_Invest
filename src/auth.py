@@ -9,16 +9,14 @@ import secrets
 
 # Resend API 配置（从 config.py 读取）
 try:
-    from config import RESEND_API_KEY, DEMO_MAX_USES_PER_USER
+    from config import RESEND_API_KEY
 except ImportError:
     RESEND_API_KEY = ""
-    DEMO_MAX_USES_PER_USER = 2
 
 RESEND_API_URL = "https://api.resend.com/emails"
 SENDER_EMAIL = "Nice Invest <noreply@niceinvest.dev>"
 CODE_EXPIRE_SECONDS = 300       # 验证码 5 分钟过期
 SESSION_EXPIRE_SECONDS = 86400  # 会话 24 小时过期
-MAX_FREE_USES = DEMO_MAX_USES_PER_USER  # 从 config.py 统一管理
 
 
 def generate_code() -> str:
@@ -204,13 +202,12 @@ class SessionStore:
 class UserStore:
     """用户信息内存存储"""
     def __init__(self):
-        self._store: dict[str, dict] = {}  # email → {usage_count, created_at, ...}
+        self._store: dict[str, dict] = {}  # email → {created_at, last_login, ...}
 
     def get_or_create(self, email: str) -> dict:
         if email not in self._store:
             self._store[email] = {
                 "email": email,
-                "usage_count": 0,
                 "created_at": time.time(),
                 "last_login": time.time(),
             }
@@ -218,26 +215,9 @@ class UserStore:
             self._store[email]["last_login"] = time.time()
         return self._store[email]
 
-    def increment_usage(self, email: str) -> int:
-        user = self.get_or_create(email)
-        user["usage_count"] += 1
-        return user["usage_count"]
-
-    def get_usage(self, email: str) -> int:
-        user = self._store.get(email, {})
-        return user.get("usage_count", 0)
-
-    def has_custom_key(self, email: str) -> bool:
-        """目前始终返回 False——用户配置 Key 由前端 localStorage 管理"""
-        return False
-
     @property
     def total_users(self) -> int:
         return len(self._store)
-
-    @property
-    def total_analyses(self) -> int:
-        return sum(u.get("usage_count", 0) for u in self._store.values())
 
 
 # ============================================================
