@@ -373,10 +373,40 @@ LangGraph-financial-agent/
 
 ```
 用户分析请求 → _apply_llm_config(llm_config)
-  ├─ llm_config 有 api_key → 用户自备 Key
-  └─ llm_config 无 api_key → 读 DEMO_API_KEY
-       ├─ os.environ.get("DEMO_API_KEY")   ← 部署平台环境变量（优先）
-       ├─ config.DEMO_API_KEY              ← 本地开发兜底
-       └─ ""                               ← 都没有 → 预检报"未配置 API Key"
+  ├─ llm_config 有 api_key → 用户自备 Key（前端配置页填写）
+  └─ llm_config 无 api_key → 五级兜底读取：
+       ├─ os.environ.get("DEMO_API_KEY")        ← Sealos 环境变量（推荐）
+       ├─ os.environ.get("OPENAI_API_KEY")       ← 兼容命名
+       ├─ os.environ.get("DEEPSEEK_API_KEY")     ← 兼容命名
+       ├─ config.DEMO_API_KEY                   ← 本地开发（gitignored）
+       └─ 硬编码兜底 Key                         ← server.py 内置（终极保底）
 ```
-无任何次数限制，登录页不变。
+无任何次数限制，登录页不变。已配置 `DEMO_API_KEY` 时诊断日志会打印 `SET:sk-xxx***`。
+
+---
+
+## 踩坑记录（避免重复犯错）
+
+### 用户侧
+
+**U1: Sealos 环境变量名写错（2026-05-19）**
+- 错误：把 `DEMO_BASE_URL` 也设成了 `DEMO_API_KEY`，导致 `DEMO_API_KEY` 的值被 URL 覆盖
+- 现象：前端配置页填同样的 Key 可以分析，但环境变量方式始终报 401
+- 教训：**部署平台配环境变量时，逐个确认变量名拼写**。Name 和 Value 是一一对应的，不要两个变量用同一个 Name
+
+### Claude 侧
+
+**C1: `_apply_llm_config` 强制覆写环境变量（2026-05-19）**
+- 错误：else 分支无论 `demo_key` 是否为空都执行 `os.environ["OPENAI_API_KEY"] = demo_key`
+- 后果：如果用户在 Sealos 里设置了 `OPENAI_API_KEY` 而非 `DEMO_API_KEY`，会被空字符串覆盖
+- 教训：**设置环境变量前必须检查值是否非空**。修后：`if demo_key:` 才设置
+
+**C2: 只读单一环境变量名（2026-05-19）**
+- 错误：`_apply_llm_config` 只读 `DEMO_API_KEY`，不认 `OPENAI_API_KEY` / `DEEPSEEK_API_KEY`
+- 后果：用户按直觉设置了 `OPENAI_API_KEY`（OpenAI 兼容的通用命名），代码找不到
+- 教训：**部署相关环境变量应兼容多种常见命名**。修后：五级 fallback 链
+
+**C3: 数据源优先级的上下文盲区（2026-05-19）**
+- 错误：Render 美国服务器阶段引入了 yfinance 主力数据源，迁移到 Sealos 国内云后忘记翻回来
+- 后果：Sealos 国内部署后仍在用 yfinance（Yahoo Finance）作为主力，延迟高于国内源
+- 教训：**部署环境变更后，数据源优先级应同步审视**。修后：akshare（国内主力）→ Tushare → yfinance（海外兜底）
