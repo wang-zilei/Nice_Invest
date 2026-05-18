@@ -298,7 +298,9 @@ function DataUnavailable() {
         <p className="text-[16px] font-medium text-[#403d39] mb-1">数据源不可用</p>
         <p className="text-[15px] text-[#403d39]/60 leading-relaxed tracking-wide">
           当前分析未能获取到结构化数据，评分和图表可能无法正常展示。
-          请检查后端数据接口连接，或尝试使用其他股票代码重新分析。
+          数据源优先级为 Yahoo Finance → 东方财富 → Tushare。
+          常见原因：海外服务器无法访问国内金融 API、数据接口超时或目标股票不在数据源覆盖范围。
+          分析结论来自大模型知识库，非实时数据，仅供参考。
         </p>
       </div>
     </div>

@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from src.mcp_tools.tushare_api import get_stock_basic, get_financial_report
 from src.mcp_tools.calculator import calc_pe_growth, calc_financial_ratio
 from src.mcp_tools.news_api import get_stock_valuation_snapshot
+from src.mcp_tools.yahoo_api import get_stock_info_yahoo
 from src.agents.template import build_system_prompt, VALUATION_JSON_SCHEMA
 
 
@@ -23,6 +24,13 @@ def get_valuation_metrics(ts_code: str) -> str:
 def get_valuation_backup(ts_code: str) -> str:
     """获取估值指标备选（akshare），当 Tushare 限流时使用。包含 PE/PB/PS/市值/股息率等"""
     return get_stock_valuation_snapshot(ts_code)
+
+
+# ---- yfinance 主力数据源（US-friendly，优先使用） ----
+@tool
+def get_valuation_data_yahoo(ts_code: str) -> str:
+    """【优先使用】获取股票估值数据（Yahoo Finance），包括 PE(TTM)/远期PE/PB/PS/PEG/股息率/市值/Beta，以及 ROE/ROA/利润率/营收增速等财务健康指标。从美国服务器可正常访问"""
+    return get_stock_info_yahoo(ts_code)
 
 
 @tool
@@ -52,7 +60,8 @@ def calculate_liquidity_ratio(current_assets: float, current_liabilities: float)
     return " | ".join(parts)
 
 
-VALUATION_TOOLS = [get_valuation_metrics, get_valuation_backup, get_financials_for_valuation, calculate_peg, calculate_liquidity_ratio]
+# 工具优先级: yahoo → akshare → tushare
+VALUATION_TOOLS = [get_valuation_data_yahoo, get_valuation_backup, get_valuation_metrics, get_financials_for_valuation, calculate_peg, calculate_liquidity_ratio]
 
 VALUATION_SYSTEM_PROMPT = build_system_prompt(
     agent_role="你是一位资深估值分析师，擅长通过多维度估值指标判断股票是否被合理定价。",
@@ -63,11 +72,11 @@ VALUATION_SYSTEM_PROMPT = build_system_prompt(
 3. 绝对估值参考：股息率、净资产收益率对估值的支撑
 4. 财务健康对估值的影响：资产负债结构、流动性对折溢价的解释""",
 
-    agent_instructions="""工作流程（akshare 优先，避免 Tushare 限流）：
-1. **首选**调用 get_valuation_backup 获取 akshare 估值快照（免费、不限流、含每股净资产/ROE/负债率/流动比率等）
-2. 再调用 get_valuation_metrics 获取 Tushare PE/PB/PS/市值等实时估值数据作为补充
-3. 如 Tushare 限流或返回空数据，不影响分析——akshare 数据已覆盖核心估值参考指标
-4. 调用 get_financials_for_valuation 获取 ROE、净利润增速等财务数据
+    agent_instructions="""工作流程（Yahoo Finance 优先，国内源兜底）：
+1. **首选**调用 get_valuation_data_yahoo 获取 Yahoo Finance 估值数据（美国服务器可正常访问，免费不限流，含 PE/PB/PS/PEG/股息率/ROE/利润率等）
+2. 如 Yahoo 数据不足，再调用 get_valuation_backup 获取 akshare 估值快照补充（国内源）
+3. 如仍不足，调用 get_valuation_metrics 获取 Tushare PE/PB/PS/市值等数据进一步补充
+4. 调用 get_financials_for_valuation 获取 ROE、净利润增速等财务数据（Tushare 补充）
 5. 基于获取的数据，调用 calculate_peg 判断成长估值匹配度
 6. 如需补充流动性分析，调用 calculate_liquidity_ratio
 7. 按五段式模板输出估值分析报告
@@ -76,7 +85,8 @@ VALUATION_SYSTEM_PROMPT = build_system_prompt(
 - 必须区分"便宜"和"低估"——低 PE 可能反映市场对行业前景的谨慎预期
 - 历史分位对比优先使用真实数据，无法获取时标注 [来源: LLM 知识库，非实时数据]
 - 银行股 PB < 1 需结合 ROE 和不良率解释
-- **限流处理**：如果 Tushare 返回"调用频次超限"或"限流"错误，不要重试，直接使用 akshare 数据继续分析""",
+- **数据源优先级**: Yahoo Finance → akshare（国内备选）→ Tushare（最后兜底）
+- **限流处理**：如果 Tushare 返回"调用频次超限"或"限流"错误，不要重试""",
 )
 
 VALUATION_SYSTEM_PROMPT += VALUATION_JSON_SCHEMA

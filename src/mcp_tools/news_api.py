@@ -5,11 +5,17 @@ news_api.py — akshare 新闻数据源封装
 
 注意：akshare 采用懒加载模式，安装后（pip install akshare）即可正常使用。
 未安装时所有函数返回友好错误信息，不影响其他模块导入。
+
+数据源优先级（2026-05-18 更新）：
+  Yahoo Finance（US-friendly，主力）→ akshare（国内备选）→ Tushare（兜底）
+  akshare 从 Render 美国服务器访问国内金融网站可能超时，已添加 15s 超时保护。
 """
+import concurrent.futures
 import pandas as pd
 from datetime import datetime, timedelta
 
 _ak = None
+_AK_TIMEOUT = 15  # akshare HTTP 调用超时（秒），避免从海外访问国内 API 永久挂起
 
 
 def _get_ak():
@@ -22,6 +28,18 @@ def _get_ak():
         except ImportError:
             raise ImportError("akshare 未安装，请执行: pip install akshare")
     return _ak
+
+
+def _ak_call(fn, *args, **kwargs):
+    """带超时保护的 akshare 函数调用（15秒），避免从海外服务器访问国内 API 永久挂起"""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn, *args, **kwargs)
+        try:
+            return future.result(timeout=_AK_TIMEOUT)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"akshare 调用超时（{_AK_TIMEOUT}秒），可能是从海外服务器访问国内金融 API 受限")
+        except Exception:
+            raise
 
 
 def _ts_code_to_symbol(ts_code: str) -> str:
@@ -50,7 +68,8 @@ def get_daily_quote_ak(ts_code: str, days: int = 60) -> str:
     symbol = _ts_code_to_symbol(ts_code)
     try:
         ak = _get_ak()
-        df = ak.stock_zh_a_hist(
+        df = _ak_call(
+            ak.stock_zh_a_hist,
             symbol=symbol,
             period="daily",
             start_date=(datetime.now() - timedelta(days=days * 2)).strftime("%Y%m%d"),
@@ -108,7 +127,7 @@ def get_eastmoney_news(ts_code: str, limit: int = 15) -> str:
     symbol = _ts_code_to_symbol(ts_code)
     try:
         ak = _get_ak()
-        df = ak.stock_news_em(symbol=symbol)
+        df = _ak_call(ak.stock_news_em, symbol=symbol)
         if df is None or df.empty:
             return f"东方财富未返回 {ts_code} 的个股新闻"
 
@@ -136,7 +155,7 @@ def get_cls_global_news(limit: int = 20) -> str:
     """
     try:
         ak = _get_ak()
-        df = ak.stock_info_global_cls(symbol="全球")
+        df = _ak_call(ak.stock_info_global_cls, symbol="全球")
         if df is None or df.empty:
             return "财联社全球财经快讯未返回数据"
 
@@ -196,7 +215,7 @@ def get_stock_financial_summary(ts_code: str) -> str:
     try:
         ak = _get_ak()
         # 主力接口：同花顺财务摘要
-        df = ak.stock_financial_abstract_ths(symbol=symbol, indicator="按报告期")
+        df = _ak_call(ak.stock_financial_abstract_ths, symbol=symbol, indicator="按报告期")
         if df is not None and not df.empty:
             latest = df.iloc[-1]  # 最新一期
             result = f"【akshare 财务摘要】（{ts_code}，{latest.get('报告期', 'N/A')}）\n"
@@ -230,7 +249,7 @@ def get_stock_valuation_snapshot(ts_code: str) -> str:
     try:
         ak = _get_ak()
         # 使用财务分析指标接口（含每股净资产、ROE等估值参考指标）
-        df = ak.stock_financial_analysis_indicator(symbol=symbol, start_year="2023")
+        df = _ak_call(ak.stock_financial_analysis_indicator, symbol=symbol, start_year="2023")
         if df is not None and not df.empty:
             latest = df.iloc[-1]  # 最新一期
             result = f"【akshare 估值参考】（{ts_code}，{latest.get('日期', 'N/A')}）\n"

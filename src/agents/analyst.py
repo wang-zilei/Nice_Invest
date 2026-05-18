@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from src.mcp_tools.tushare_api import get_stock_basic, get_financial_report
 from src.mcp_tools.calculator import calc_dupont, calc_financial_ratio, calc_cagr
 from src.mcp_tools.news_api import get_stock_financial_summary
+from src.mcp_tools.yahoo_api import get_stock_info_yahoo, get_financials_yahoo
 from src.agents.template import build_system_prompt, FUNDAMENTAL_JSON_SCHEMA
 
 
@@ -28,6 +29,15 @@ def get_fundamental_backup(ts_code: str) -> str:
     return get_stock_financial_summary(ts_code)
 
 
+# ---- yfinance 主力数据源（US-friendly，优先使用） ----
+@tool
+def get_fundamental_data_yahoo(ts_code: str) -> str:
+    """【优先使用】获取股票基本面数据（Yahoo Finance），包括 ROE/ROA/利润率/营收增速/资产负债率/流动比率等核心财务指标，以及 PE/PB/PS/市值等估值快照。从美国服务器可正常访问"""
+    info = get_stock_info_yahoo(ts_code)
+    financials = get_financials_yahoo(ts_code)
+    return info + "\n\n" + financials
+
+
 @tool
 def calculate_dupont_analysis(net_profit_margin: float, asset_turnover: float, equity_multiplier: float) -> str:
     """执行杜邦分析，计算 ROE 并拆解为净利率、资产周转率、权益乘数三因素"""
@@ -44,7 +54,8 @@ def calculate_growth_rate(start_value: float, end_value: float, years: int) -> s
     return f"CAGR: {result['cagr']}% | 起始值={result['start_value']} | 终值={result['end_value']} | 年数={result['years']}年 | 解读: {result['interpretation']}"
 
 
-FUNDAMENTAL_TOOLS = [get_fundamental_data, get_fundamental_backup, calculate_dupont_analysis, calculate_growth_rate]
+# 工具优先级: yahoo → akshare → tushare
+FUNDAMENTAL_TOOLS = [get_fundamental_data_yahoo, get_fundamental_backup, get_fundamental_data, calculate_dupont_analysis, calculate_growth_rate]
 
 # 基本面分析 Agent 的系统提示词（使用统一模板）
 FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
@@ -56,10 +67,10 @@ FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
 3. 偿债能力：资产负债率、流动比率、速动比率
 4. 运营效率：资产周转率、权益乘数变化趋势""",
 
-    agent_instructions="""工作流程（akshare 优先，避免 Tushare 限流）：
-1. **首选**调用 get_fundamental_backup 获取 akshare 财务摘要（免费、不限流、包含 ROE/营收/利润率/资产负债率等核心指标）
-2. 再调用 get_fundamental_data 获取 Tushare Pro 数据作为补充（含更全的财务指标表）
-3. 如 Tushare 限流或返回空数据，不影响分析——akshare 数据已足够覆盖核心指标
+    agent_instructions="""工作流程（Yahoo Finance 优先，国内源兜底）：
+1. **首选**调用 get_fundamental_data_yahoo 获取 Yahoo Finance 数据（美国服务器可正常访问，免费不限流，含 ROE/利润率/营收增速/PE/PB/市值等核心指标）
+2. 如 Yahoo 数据不足，再调用 get_fundamental_backup 获取 akshare 数据补充（东方财富/同花顺，国内源）
+3. 如仍不足，调用 get_fundamental_data 获取 Tushare Pro 数据进一步补充
 4. 根据获取的数据，必要时调用 calculate_dupont_analysis 进行杜邦拆解
 5. 如数据中包含多年营收/利润数据，调用 calculate_growth_rate 计算 CAGR
 6. 综合所有数据，按五段式模板输出分析报告
@@ -68,7 +79,8 @@ FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
 - 银行股分析需额外关注不良率、拨备覆盖率、净息差、资本充足率等指标
 - 如所有数据接口均返回空，必须在元信息中如实声明，使用 LLM 知识库兜底并标注
 - 杜邦分析和CAGR计算需要从财务数据中提取参数后再调用
-- **限流处理**：如果 Tushare 返回"调用频次超限"或"限流"错误，不要重试，直接使用 akshare 数据继续分析""",
+- **数据源优先级**: Yahoo Finance → akshare（国内备选）→ Tushare（最后兜底）
+- **限流处理**：如果 Tushare 返回"调用频次超限"或"限流"错误，不要重试""",
 )
 
 FUNDAMENTAL_SYSTEM_PROMPT += FUNDAMENTAL_JSON_SCHEMA

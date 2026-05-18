@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 
 from src.mcp_tools.news_api import get_combined_news, get_eastmoney_news, get_cls_global_news
 from src.mcp_tools.tushare_api import search_stock
+from src.mcp_tools.yahoo_api import get_news_yahoo
 from src.agents.template import build_system_prompt, NEWS_JSON_SCHEMA
 
 
@@ -30,13 +31,21 @@ def get_market_telegraph() -> str:
     return get_cls_global_news()
 
 
+# ---- yfinance 主力数据源（US-friendly，优先使用） ----
+@tool
+def get_stock_news_yahoo(ts_code: str) -> str:
+    """【优先使用】获取股票相关新闻（Yahoo Finance），包含最近新闻标题、来源、发布时间。从美国服务器可正常访问"""
+    return get_news_yahoo(ts_code, limit=15)
+
+
 @tool
 def search_stock_by_keyword(keyword: str) -> str:
     """按关键词搜索股票，用于将中文名称转换为 ts_code"""
     return search_stock(keyword)
 
 
-NEWS_TOOLS = [get_stock_news_combined, get_stock_news_em, get_market_telegraph, search_stock_by_keyword]
+# 工具优先级: yahoo → akshare（东方财富+财联社）→ tushare
+NEWS_TOOLS = [get_stock_news_yahoo, get_stock_news_combined, get_stock_news_em, get_market_telegraph, search_stock_by_keyword]
 
 NEWS_SYSTEM_PROMPT = build_system_prompt(
     agent_role="你是一位资深金融舆情分析师，擅长通过新闻资讯判断市场情绪和重大事件对股价的潜在影响。",
@@ -47,17 +56,19 @@ NEWS_SYSTEM_PROMPT = build_system_prompt(
 3. 行业政策：影响该股票所在行业的政策或监管变化
 4. 市场关注度：新闻频率和热度变化反映的市场关注程度""",
 
-    agent_instructions="""工作流程：
-1. 首选调用 get_stock_news_combined 获取综合新闻（个股+市场+全球）
-2. 如需深入个股新闻，调用 get_stock_news_em 补充
-3. 如需了解宏观市场情绪，调用 get_market_telegraph 获取财联社电报
-4. 按五段式模板输出舆情分析报告
+    agent_instructions="""工作流程（Yahoo Finance 优先，国内源兜底）：
+1. **首选**调用 get_stock_news_yahoo 获取 Yahoo Finance 新闻（美国服务器可正常访问，含最新英文财经新闻）
+2. 调用 get_stock_news_combined 获取综合新闻（东方财富个股 + 财联社电报 + 全球财经），国内源补充
+3. 如需深入个股新闻，调用 get_stock_news_em 获取东方财富个股新闻
+4. 如需了解宏观市场情绪，调用 get_market_telegraph 获取财联社电报
+5. 按五段式模板输出舆情分析报告
 
 注意：
 - 严格区分"事件事实"和"市场解读"，事实引用原文，解读标注为分析观点
-- 如 akshare 数据获取失败，元信息中如实声明，使用 Tushare search_stock 或 LLM 知识库兜底
+- 如所有数据接口均获取失败，元信息中如实声明，使用 LLM 知识库兜底
 - 不得虚构新闻事件，不得引用无法验证的消息来源
-- 数据来源标记：[来源: 东方财富] / [来源: 财联社] / [来源: LLM 知识库]""",
+- 数据来源标记：[来源: Yahoo Finance] / [来源: 东方财富] / [来源: 财联社] / [来源: LLM 知识库]
+- **数据源优先级**: Yahoo Finance → akshare（东方财富+财联社，国内备选）→ LLM 知识库兜底""",
 )
 
 NEWS_SYSTEM_PROMPT += NEWS_JSON_SCHEMA
