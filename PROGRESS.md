@@ -82,7 +82,34 @@
 ✅ **Bug 修复（2026-05-17 晚）**：template.py 花括号转义修复 + 游客模式跳过登录 + CORS 端口扩展
 ✅ **阶段九（2026-05-18）**：输出格式清洗 + 数据源优先级反转 + 前端结构化展示 + 历史缓存修复 + 股票名称显示修复 + Markdown符号去除 + 报告UI修复 + 报告页布局重排/####清洗/仿宋二级标题/字号升级/关键指标颜色加深
 ✅ **搜索重构 + A股安全护栏（2026-05-18）**：A股注册表（akshare 5517只）+ 搜索框确认按钮 + /api/validate-stock 校验端点 + LLM 模糊识别兜底 + 非A股警告弹窗
+✅ **阶段十：GitHub 发布 + Railway 部署（2026-05-18）**：前后端合一部署、config 导入修复、Gradio 6.0 兼容、页面标题修复、黑屏修复
+⬜ 下一步：体验 Key 问题排查
 ⬜ 下一步：面试资产整理
+
+### 阶段十：GitHub 发布 + Railway 部署（2026-05-18）
+
+| # | 任务 | 状态 | 备注 |
+|---|------|------|------|
+| 10.1 | 前端 API_BASE 相对路径化 | ✅ | `api.ts` 改为 `""`，前后端同域 |
+| 10.2 | server.py 静态文件 serve | ✅ | `StaticFiles(directory="web/dist", html=True)` |
+| 10.3 | .gitignore 加固 | ✅ | 排除 `config.py`、`.codebuddy/`、`.claude/`、`.workbuddy/`；保留 `!web/dist/` |
+| 10.4 | GitHub 仓库创建与推送 | ✅ | `https://github.com/wang-zilei/Nice_Invest` |
+| 10.5 | config 导入全量修复 | ✅ | 5 个模块 6 处 `import config` → try/except + env fallback |
+| 10.6 | Gradio 6.0 兼容修复 | ✅ | `css` 参数从 `Blocks()` 移至 `launch()` |
+| 10.7 | Procfile 入口指定 | ✅ | `web: python server.py`，防止 Railway 误用 main.py |
+| 10.8 | 页面标题修改 | ✅ | `index.html` 标题 "My Google AI Studio App" → "Nice Invest" |
+| 10.9 | 黑屏修复（landing.html 缺失） | ✅ | 重新构建，Vite 从 `public/` 复制 `landing.html` 到 `dist/` |
+| 10.10 | 体验 Key 线上不生效 | ⬜ | 待排查：疑似 DeepSeek API Key 余额耗尽（402），需查看 Railway 日志确认 |
+
+**部署 Bug 汇总**：
+
+| Bug | 现象 | 根因 | 修复 |
+|-----|------|------|------|
+| B9: ModuleNotFoundError | Railway 启动崩溃 | `config.py` 被 gitignore，线上无此文件，`import config` 直接抛异常 | 5 模块全部 try/except + os.environ 兜底 |
+| B10: Gradio 6.0 IndexError | 持续重启循环 | Railway 自动检测 `main.py` 为入口，Gradio 6.0 Blocks() 不接受 css 参数 | ① css 移至 launch() ② 新增 Procfile 指定 `server.py` |
+| B11: Landing 黑屏 | 页面全黑，仅能盲点进入 | `web/dist/landing.html` 被清理后未重新构建（iframe 加载 404） | 清理 dist 后完整 rebuild，Vite 从 public/ 复制 |
+| B12: 体验 Key 不生效 | 免费体验 2 次无法使用 | 待确认：疑似 DeepSeek 体验 Key 余额耗尽（402 Insufficient Balance） | 待排查 |
+| B13: 页面标题错误 | 标签页显示 "My Google AI Studio App" | index.html title 未修改 | 改为 "Nice Invest" |
 
 ### 阶段九补充：Markdown 符号去除与 UI 修复（2026-05-18 本会话）
 
@@ -309,6 +336,11 @@
 - **A 股注册表**：基于 akshare `stock_info_a_code_name()` 获取 5517 只 A 股（代码+名称），缓存到本地 JSON 每日刷新；替代原有 Tushare+20 只硬编码搜索方案（2026-05-18 决策）
 - **安全护栏**：双层校验（本地注册表 + LLM 模糊识别），用户输入经 `POST /api/validate-stock` 校验后才进入分析；非 A 股输入弹窗警告，不触发 Agent（2026-05-18 决策）
 - **搜索交互重构**：点击建议仅填充输入框不再自动分析，新增"确认分析"按钮触发校验→分析流程；支持 Enter 快捷键（2026-05-18 决策）
+- **前后端合一部署**：FastAPI 用 `StaticFiles(html=True)` 直接 serve 前端 dist，无需 Nginx 或多服务（2026-05-18 决策）
+- **Railway 部署**：Procfile 指定 `python server.py`，端口从 `$PORT` 环境变量读取（2026-05-18 决策）
+- **配置外部化**：所有 `import config` 改为 try/except + `os.environ.get()` 兜底，线上依赖 Railway 环境变量（2026-05-18 决策）
+- **Demo Key 后端化**：体验 Key 通过 Railway Variables 注入，前端不包含任何硬编码 Key（2026-05-18 决策）
+- **GitHub Pages 不适合**：项目需要 Python 后端，GitHub Pages 仅支持静态文件，选择 Railway 免费托管（2026-05-18 决策）
 
 ## 注意事项
 
