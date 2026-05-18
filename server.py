@@ -32,7 +32,6 @@ from src.logger import logger, print_startup_summary
 from src.auth import (
     code_store, session_store, user_store,
     generate_code, send_verification_email,
-    MAX_FREE_USES,
 )
 from src.stock_registry import search_registry, validate_stock, get_registry_stats
 
@@ -150,16 +149,12 @@ async def verify_code(req: VerifyCodeRequest):
 
     session_token = session_store.create(email)
     user_store.get_or_create(email)
-    usage_count = user_store.get_usage(email)
-    remaining = max(0, MAX_FREE_USES - usage_count)
 
-    logger.info(f"[AUTH] 用户登录成功 → {email}（剩余 {remaining}/{MAX_FREE_USES} 次）")
+    logger.info(f"[AUTH] 用户登录成功 → {email}")
     return {
         "ok": True,
         "session_token": session_token,
         "email": email,
-        "remaining_uses": remaining,
-        "max_uses": MAX_FREE_USES,
     }
 
 
@@ -169,45 +164,24 @@ async def check_session(session_token: str = Header(None, alias="X-Session-Token
     if not session_token:
         return {"valid": False, "reason": "缺少 session_token"}
     if session_token == "__guest__":
-        return {"valid": True, "email": "guest@niceinvest.dev", "remaining_uses": MAX_FREE_USES, "max_uses": MAX_FREE_USES, "is_guest": True}
+        return {"valid": True, "email": "guest@niceinvest.dev", "is_guest": True}
     email = session_store.validate(session_token)
     if not email:
         return {"valid": False, "reason": "session 无效或已过期"}
-    usage_count = user_store.get_usage(email)
-    remaining = max(0, MAX_FREE_USES - usage_count)
-    return {"valid": True, "email": email, "remaining_uses": remaining, "max_uses": MAX_FREE_USES}
+    return {"valid": True, "email": email}
 
 
 @app.get("/api/auth/usage")
 async def get_usage(session_token: str = Header(None, alias="X-Session-Token")):
-    """查询用户剩余免费次数和体验 Key 状态"""
+    """查询用户信息"""
     if not session_token:
         raise HTTPException(status_code=401, detail="缺少 session_token")
     if session_token == "__guest__":
-        return {
-            "email": "guest@niceinvest.dev",
-            "usage_count": 0,
-            "remaining_uses": MAX_FREE_USES,
-            "max_uses": MAX_FREE_USES,
-            "has_demo_remaining": True,
-            "demo_model": os.environ.get("DEMO_MODEL", "deepseek-chat"),
-            "is_guest": True,
-        }
+        return {"email": "guest@niceinvest.dev", "is_guest": True}
     email = session_store.validate(session_token)
     if not email:
         raise HTTPException(status_code=401, detail="session 无效或已过期")
-
-    usage_count = user_store.get_usage(email)
-    remaining = max(0, MAX_FREE_USES - usage_count)
-
-    return {
-        "email": email,
-        "usage_count": usage_count,
-        "remaining_uses": remaining,
-        "max_uses": MAX_FREE_USES,
-        "has_demo_remaining": remaining > 0,
-        "demo_model": os.environ.get("DEMO_MODEL", "deepseek-chat"),
-    }
+    return {"email": email}
 
 # ============================================================
 # POST /api/search — 股票搜索（基于 A 股注册表，覆盖全量 ~5500 只股票）
@@ -353,25 +327,13 @@ async def analyze(req: AnalyzeRequest, raw_request: Request):
     if not user_email:
         raise HTTPException(status_code=401, detail="请先登录后再使用分析功能")
 
-    # ---- 体验 Key 鉴权 + 即时扣减（先扣后检，消除并发窗口） ----
+    # ---- 检查 API Key：用户自备 > 后端体验 Key ----
     user_config = req.llm_config or {}
     user_has_own_key = bool(user_config.get("api_key") or user_config.get("openai_api_key"))
-    user_usage = user_store.get_usage(user_email)
-
-    if not user_has_own_key:
-        # 先扣减再检查：杜绝并发请求同时通过预检
-        user_usage = user_store.increment_usage(user_email)
-        if user_usage > MAX_FREE_USES:
-            # 超额回滚
-            user_store._store[user_email]["usage_count"] -= 1
-            raise HTTPException(
-                status_code=429,
-                detail=f"体验次数已用完（{MAX_FREE_USES}/{MAX_FREE_USES}），请配置您自己的 API Key 后继续使用。"
-            )
 
     # 生成分析 ID
     analysis_id = str(uuid.uuid4())[:8]
-    logger.info(f"[ANALYZE] 开始 → {stock_code} | 用户={user_email} | 自备Key={user_has_own_key} | 已用次数={user_usage}/{MAX_FREE_USES}")
+    logger.info(f"[ANALYZE] 开始 → {stock_code} | 用户={user_email} | 自备Key={user_has_own_key}")
 
     async def event_generator() -> AsyncGenerator[str, None]:
         """SSE 事件生成器（带超时保护，避免永久挂起）"""
@@ -610,7 +572,6 @@ async def analyze(req: AnalyzeRequest, raw_request: Request):
             # ---- 完成 ----
             elapsed = round(time.time() - started_at, 1)
 
-            # 次数扣减已在 analyze() 入口预检处完成（先扣后检，消除并发窗口）
             logger.info(f"[ANALYZE] 完成 → {stock_code} | 耗时={elapsed}s | 判定={final_verdict}")
 
             # 构建完整历史记录（包含所有分析结果，供历史回放）
@@ -798,71 +759,27 @@ async def _preflight_check() -> tuple:
         return False, error_msg[:150]
 
 
-def _resolve_demo_config() -> tuple[str, str, str]:
-    """解析体验 Key 配置，环境变量优先于 config.py 导入。"""
-    def _get(key: str, default: str = "") -> str:
-        # 1. 先读环境变量（Railway / 云平台的标准方式）
-        val = os.environ.get(key, "")
-        if val:
-            logger.info(f"[DEMO] {key} ← 环境变量")
-            return val
-        # 2. 环境变量为空，尝试 config.py 导入
-        try:
-            import importlib
-            cfg = importlib.import_module("config")
-            val = getattr(cfg, key, "")
-            if val and not val.startswith("sk-...") and not val.startswith("your_"):
-                logger.info(f"[DEMO] {key} ← config.py")
-                return val
-        except ImportError:
-            pass
-        # 3. 都没配置，返回默认值
-        logger.info(f"[DEMO] {key} ← 默认值（'default'）")
-        return default
-
-    api_key = _get("DEMO_API_KEY", "")
-    base_url = _get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
-    model = _get("DEMO_MODEL", "deepseek-chat")
-    return api_key, base_url, model
-
-
 def _apply_llm_config(llm_config: dict, user_email: str = None):
-    """将前端传来的统一 LLM 配置写入环境变量。
-
-    优先级：用户自备 Key > 后端体验 Key（未超限时）
-    当用户没有自备 Key 且还有剩余免费次数时，自动注入后端体验 Key。
-    """
+    """将 LLM 配置写入环境变量。用户自备 Key 优先，否则使用后端体验 Key。"""
     api_key = llm_config.get("api_key") or llm_config.get("openai_api_key")
     base_url = llm_config.get("base_url") or llm_config.get("openai_base_url")
     model = llm_config.get("model", "deepseek-chat")
 
     if api_key:
-        # 用户配置了自己的 Key，直接使用
         os.environ["OPENAI_API_KEY"] = api_key
         os.environ["DEEPSEEK_API_KEY"] = api_key
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
-        # 自备 Key 场景：继续设置 base_url 和 model（下面的逻辑会处理）
-    elif user_email:
-        # 用户没有自备 Key，注入体验 Key（次数已在 analyze() 预检时扣减）
-        demo_key, demo_url, demo_model = _resolve_demo_config()
-        os.environ["OPENAI_API_KEY"] = demo_key
-        os.environ["DEEPSEEK_API_KEY"] = demo_key
-        os.environ["OPENAI_BASE_URL"] = demo_url
-        os.environ["DEFAULT_MODEL"] = demo_model
-        logger.info(f"[CONFIG] 使用体验 Key → model={demo_model} | 用户已用 {user_store.get_usage(user_email)}/{MAX_FREE_USES} 次")
-        return
     else:
-        # 无 session，按体验 Key 处理
-        demo_key, demo_url, demo_model = _resolve_demo_config()
+        demo_key = os.environ.get("DEMO_API_KEY", "")
         os.environ["OPENAI_API_KEY"] = demo_key
         os.environ["DEEPSEEK_API_KEY"] = demo_key
-        os.environ["OPENAI_BASE_URL"] = demo_url
-        os.environ["DEFAULT_MODEL"] = demo_model
-        return
+        logger.info(f"[CONFIG] 使用体验 Key → model={model}")
 
     if base_url:
         os.environ["OPENAI_BASE_URL"] = base_url
-    os.environ["DEFAULT_MODEL"] = model if model else os.environ.get("DEFAULT_MODEL", "deepseek-chat")
+    else:
+        os.environ["OPENAI_BASE_URL"] = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+    os.environ["DEFAULT_MODEL"] = model
 
 
 def _sse(event: str, data: dict) -> str:

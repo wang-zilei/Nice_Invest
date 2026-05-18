@@ -8,7 +8,7 @@ import { motion } from "motion/react";
 import {
   searchStocks, analyzeStock, getHistory, getHistoryDetail, validateConfig,
   createInitialAnalysis,
-  getUsage, getSessionToken, getSessionEmail, clearSession,
+  getSessionToken, getSessionEmail, clearSession,
   cleanAnalysisText, parseJsonFromText, lookupStockName, stockDisplayName,
   validateStockInput,
   type AnalysisData, type AgentTask, type StockMatch,
@@ -89,29 +89,21 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
   // 历史
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
-  // 用量（从后端获取）
-  const [usageInfo, setUsageInfo] = useState<{ remaining: number; max: number } | null>(null);
   const userEmail = getSessionEmail();
 
-  // 加载历史和用量
+  // 加载历史
   useEffect(() => {
     getHistory(10).then(setHistory);
-    const token = getSessionToken();
-    if (token) {
-      getUsage(token)
-        .then((info) => setUsageInfo({ remaining: info.remaining_uses, max: info.max_uses }))
-        .catch(() => {/* ignore */});
-    }
   }, []);
 
   // ============================================================
-  // 获取实际使用的 LLM 配置（用户自备 Key 优先，否则由后端注入体验 Key）
+  // 获取实际使用的 LLM 配置（用户自备 Key 优先，否则后端注入体验 Key）
   // ============================================================
   const getEffectiveLLMConfig = useCallback((): LLMConfig => {
     if (config.llm?.api_key) {
-      return config.llm; // 用户已配置自己的 Key
+      return config.llm;
     }
-    return {}; // 后端根据 session 决定是否注入体验 Key
+    return {};
   }, [config.llm]);
 
   // ============================================================
@@ -682,11 +674,6 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
                   <h1 className="text-[36px] font-tech font-extrabold text-[#252422] leading-tight mb-1 tracking-tight">
                     {displayData.name}
                   </h1>
-                  {!config.llm?.api_key && usageInfo && (
-                    <p className="text-[13px] text-[#403d39]/50">
-                      体验模式 · 剩余 {usageInfo.remaining} / {usageInfo.max} 次免费分析
-                    </p>
-                  )}
                   {userEmail && userEmail !== "guest@niceinvest.dev" && (
                     <p className="text-[12px] text-[#403d39]/30 mt-0.5">{userEmail}</p>
                   )}
@@ -813,9 +800,6 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
         onClose={() => setConfigOpen(false)}
         validating={validating}
         validResults={validResults}
-        usageCount={usageInfo ? (usageInfo.max - usageInfo.remaining) : 0}
-        demoMaxUses={usageInfo?.max || 2}
-        demoModel="deepseek-chat"
       />
 
       {/* 历史面板 */}
@@ -973,9 +957,6 @@ function ConfigPanel({
   onClose,
   validating,
   validResults,
-  usageCount,
-  demoMaxUses,
-  demoModel,
 }: {
   open: boolean;
   draft: { llm: LLMConfig };
@@ -985,13 +966,8 @@ function ConfigPanel({
   onClose: () => void;
   validating: boolean;
   validResults: Record<string, string>;
-  usageCount: number;
-  demoMaxUses: number;
-  demoModel: string;
 }) {
   if (!open) return null;
-
-  const hasCustomKey = !!draft.llm?.api_key;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={onClose}>
@@ -1005,16 +981,6 @@ function ConfigPanel({
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {/* 体验模式提示 */}
-        {!hasCustomKey && (
-          <div className="mb-5 p-3 bg-[#fffcf2] border border-[#ccc5b9]/30 rounded-lg">
-            <p className="text-[13px] text-[#403d39]/70 leading-relaxed">
-              当前使用<b>公开体验 API</b>（{demoModel}），剩余 <b>{demoMaxUses - usageCount}</b> 次。
-              配置自己的大模型 API 可不限次数使用。
-            </p>
-          </div>
-        )}
 
         <div className="space-y-4">
           <div>

@@ -71,25 +71,18 @@ export interface VerifyCodeResponse {
   ok: boolean;
   session_token: string;
   email: string;
-  remaining_uses: number;
-  max_uses: number;
 }
 
 export interface SessionCheckResponse {
   valid: boolean;
   reason?: string;
   email?: string;
-  remaining_uses?: number;
-  max_uses?: number;
+  is_guest?: boolean;
 }
 
 export interface UsageResponse {
   email: string;
-  usage_count: number;
-  remaining_uses: number;
-  max_uses: number;
-  has_demo_remaining: boolean;
-  demo_model: string;
+  is_guest?: boolean;
 }
 
 // ============================================================
