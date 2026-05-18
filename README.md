@@ -5,11 +5,11 @@
 
 本项目基于 LangGraph + ReAct 模式，设计了一个面向金融分析场景的 Multi-Agent 系统。系统支持：
 - **4 个分析 Agent 并行执行**：基本面、技术面、估值、新闻
-- **MCP 工具链 + Function Call**：akshare（主数据源，免费不限流）+ Tushare Pro（备选补充）
+- **MCP 工具链 + Function Call**：akshare（国内主力，东方财富/同花顺）+ Tushare Pro（第一备选）+ yfinance（海外兜底，Yahoo Finance）
 - **Summary Agent（ReAct 模式）**：交叉验证 + 数据一致性核实 + 加权综合评分
 - **React 19 前端 + FastAPI 后端 + SSE 流式推送**：3 页 SPA（Landing → 分析工作台 → 研报）
 - **两段式输出**：Markdown 正文+ JSON 代码块（前端渲染）
-- **线上体验**：https://nice-invest.onrender.com（Render Docker 部署）
+- **线上体验**：Sealos 国内云部署（原 Render 地址已停用：数据源从美国无法访问中国金融 API）
 
 ## 快速开始
 
@@ -66,14 +66,15 @@ LangGraph-financial-agent/
 │   ├── state.py            ← 全局状态定义
 │   ├── agents/
 │   │   ├── template.py     ← 七条铁律 + 两段式输出 + 5 种 JSON Schema
-│   │   ├── analyst.py      ← 基本面 Agent（akshare 优先，Tushare 备选）
-│   │   ├── technical.py    ← 技术面 Agent（akshare 60日OHLCV 优先）
-│   │   ├── valuation.py    ← 估值 Agent（akshare 优先 + PEG）
-│   │   ├── news.py         ← 新闻 Agent（akshare 东方财富 + 财联社）
+│   │   ├── analyst.py      ← 基本面 Agent（akshare 主 → Tushare 备1 → yfinance 备2）
+│   │   ├── technical.py    ← 技术面 Agent（akshare 主 → Tushare 备1 → yfinance 备2）
+│   │   ├── valuation.py    ← 估值 Agent（akshare 主 → Tushare 备1 → yfinance 备2）
+│   │   ├── news.py         ← 新闻 Agent（akshare 主 → yfinance 兜底）
 │   │   └── summary.py      ← Summary Agent（ReAct，交叉验证 + 加权评分 + ReportData JSON）
 │   └── mcp_tools/
-│       ├── tushare_api.py  ← Tushare Pro 封装（动态 token 支持）
-│       ├── news_api.py     ← akshare 新闻 + 财务/行情备选数据
+│       ├── news_api.py     ← akshare 主力数据源（东方财富/同花顺，15s 超时保护）
+│       ├── tushare_api.py  ← Tushare Pro 封装（第一备选）
+│       ├── yahoo_api.py    ← yfinance 海外兜底（Yahoo Finance，国内正常时不需要）
 │       └── calculator.py   ← 财务计算（杜邦/PEG/CAGR/比率）
 │
 ├── web/                    ← React 19 前端（TypeScript + Tailwind + Three.js）

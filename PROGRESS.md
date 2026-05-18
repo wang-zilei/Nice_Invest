@@ -1,7 +1,7 @@
 # LangGraph-financial-agent 项目进展
 
 > 创建时间：2026-05-15
-> 最后更新：2026-05-18（阶段十）
+> 最后更新：2026-05-19（阶段十一：数据源架构升级 + Sealos 国内部署）
 > 目标岗位：腾讯金融大模型评测实习生（项目制）
 
 ---
@@ -85,7 +85,70 @@
 ✅ **阶段十：GitHub 发布 + Railway 部署（2026-05-18）**：前后端合一部署、config 导入修复、Gradio 6.0 兼容、页面标题修复、黑屏修复
 ✅ **阶段十补充2：体验 Key config.py 兜底恢复（2026-05-18）**：_apply_llm_config 恢复 config.py 三级兜底（os.environ → config.py → 默认值），修复 402 错误提示文案，本地+线上双环境验证 PASS
 ✅ **阶段十补充3：Render 部署切换（2026-05-18）**：Railway nixpacks 构建持续失败 → 添加 Dockerfile + render.yaml → 切 Render Docker 部署 → 部署成功
-🟢 **项目已可正式使用**：https://nice-invest.onrender.com
+🟢 **项目已可正式使用**：Sealos 国内云部署（2026-05-19 迁移）
+
+### 阶段十一：数据源架构升级 + Sealos 国内部署（2026-05-19）
+
+**背景**：Render 美国服务器无法访问中国金融 API（东方财富/同花顺/财联社被墙），Tushare Token 未配置，所有数据源失效 → Agent 回退 LLM 知识 → 无结构化 JSON → 前端评分全 0 显示"数据源不可用"。
+
+**解决方案**：新增 yfinance 主力数据源（Yahoo Finance，US-friendly）+ 迁移 Sealos 国内云。
+
+| # | 任务 | 状态 | 备注 |
+|---|------|------|------|
+| 11.1 | 新建 yahoo_api.py（yfinance 封装） | ✅ | `src/mcp_tools/yahoo_api.py`，5 个数据函数（信息/估值/财务/行情/新闻） |
+| 11.2 | 基本面 Agent yfinance 工具集成 | ✅ | `analyst.py`，新增 `get_fundamental_data_yahoo`，三阶段降级 |
+| 11.3 | 技术面 Agent yfinance 工具集成 | ✅ | `technical.py`，新增 `get_technical_data_yahoo` |
+| 11.4 | 估值 Agent yfinance 工具集成 | ✅ | `valuation.py`，新增 `get_valuation_data_yahoo` |
+| 11.5 | 新闻 Agent yfinance 工具集成 | ✅ | `news.py`，新增 `get_stock_news_yahoo` |
+| 11.6 | akshare 超时保护 | ✅ | `news_api.py`，所有 akshare 调用包裹 `concurrent.futures` 15s 超时 |
+| 11.7 | GitHub Actions CI/CD | ✅ | `.github/workflows/docker-build.yml`，自动构建+推送到阿里云 ACR |
+| 11.8 | Sealos 国内部署 | ✅ | 从 ACR 拉镜像，`DEMO_API_KEY` + `DEMO_BASE_URL` + `PORT` 环境变量配置 |
+| 11.9 | 前端错误提示改进 | ✅ | `Report.tsx` DataUnavailable 文案更新（数据源优先级 + 海外服务器提示） |
+
+**改动文件**：8 个文件 + 1 个新增目录（`.github/workflows/`）
+
+**三级数据源降级策略**：
+```
+akshare (东方财富/同花顺，国内主力) → Tushare Pro (第一备选) → yfinance (Yahoo Finance，海外兜底)
+```
+
+**Bug 修复明细**：
+
+**B16: Render 数据源全部失效**
+- 现象：网站可访问可分析，但评分全 0，前端显示"数据源不可用"
+- 根因：Render 美国 IP → akshare HTTP 调用东方财富/同花顺/财联社超时（被墙）；Tushare Token 未配置
+- 修复：①新增 yfinance 主力数据源（Yahoo Finance 国内可秒拉）②GitHub Actions + 阿里云 ACR 国内镜像仓库 ③Sealos 国内云部署
+- 补充修复：aks 调用添加 15s 超时（`_ak_call` wrapper），快速失败不再挂起
+
+### 阶段十一补充：数据源优先级翻转 + Sealos 部署 API Key 修复（2026-05-19）
+
+**背景**：Sealos 国内云部署后，国内数据源（akshare/东方财富）已可正常访问，yfinance 不再需要作为主数据源。同时 Sealos 环境变量配置后仍报 401。
+
+**数据源优先级翻转**：
+- 原优先级：yfinance → akshare → Tushare
+- 新优先级：**akshare（国内主力）→ Tushare（第一备选）→ yfinance（海外兜底）**
+- 改动 4 个 Agent 文件：工具列表顺序、工具描述、系统提示词全部翻转
+- yfinance 保留（海外兜底），不删除
+
+**B17: Sealos 部署 API Key 401 修复（server.py `_apply_llm_config`）**：
+- 现象：Sealos 配置了环境变量后仍报"API Key 无效（401）"
+- 根因：`_apply_llm_config()` 只读 `DEMO_API_KEY`，且无论是否找到 Key 都强制覆写 `OPENAI_API_KEY`/`DEEPSEEK_API_KEY`
+  - 如果用户设置了 `OPENAI_API_KEY` 而非 `DEMO_API_KEY`，会被空字符串覆盖
+- 修复：
+  1. Key 读取扩展为三级：`DEMO_API_KEY` → `OPENAI_API_KEY` → `DEEPSEEK_API_KEY` → `config.py`
+  2. Base URL 读取扩展为四级：`DEMO_BASE_URL` → `OPENAI_BASE_URL` → `DEEPSEEK_BASE_URL` → `config.py` → DeepSeek 默认
+  3. 只在找到非空 Key 时才设置环境变量，不再用空值覆写已有配置
+- 影响范围：`server.py` `_apply_llm_config()` 函数
+
+**改动文件**：7 个文件
+- `server.py`：`_apply_llm_config()` 多级环境变量读取 + 防覆写保护
+- `src/agents/analyst.py`：工具优先级 akshare→Tushare→yfinance
+- `src/agents/technical.py`：同上
+- `src/agents/valuation.py`：同上
+- `src/agents/news.py`：同上
+- `CLAUDE.md`：数据源文档全部更新
+- `README.md`：数据源描述更新
+- `PROGRESS.md`：本文档（`_ak_call` wrapper），快速失败不再挂起
 
 ### 阶段十：GitHub 发布 + Railway 部署（2026-05-18）
 

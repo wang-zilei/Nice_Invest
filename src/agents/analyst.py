@@ -29,10 +29,10 @@ def get_fundamental_backup(ts_code: str) -> str:
     return get_stock_financial_summary(ts_code)
 
 
-# ---- yfinance 主力数据源（US-friendly，优先使用） ----
+# ---- yfinance 兜底数据源（海外备选，国内服务正常时不需要） ----
 @tool
 def get_fundamental_data_yahoo(ts_code: str) -> str:
-    """【优先使用】获取股票基本面数据（Yahoo Finance），包括 ROE/ROA/利润率/营收增速/资产负债率/流动比率等核心财务指标，以及 PE/PB/PS/市值等估值快照。从美国服务器可正常访问"""
+    """【兜底】获取股票基本面数据（Yahoo Finance），当国内数据源均不可用时使用。包括 ROE/ROA/利润率/营收增速/资产负债率/流动比率等核心财务指标"""
     info = get_stock_info_yahoo(ts_code)
     financials = get_financials_yahoo(ts_code)
     return info + "\n\n" + financials
@@ -54,8 +54,8 @@ def calculate_growth_rate(start_value: float, end_value: float, years: int) -> s
     return f"CAGR: {result['cagr']}% | 起始值={result['start_value']} | 终值={result['end_value']} | 年数={result['years']}年 | 解读: {result['interpretation']}"
 
 
-# 工具优先级: yahoo → akshare → tushare
-FUNDAMENTAL_TOOLS = [get_fundamental_data_yahoo, get_fundamental_backup, get_fundamental_data, calculate_dupont_analysis, calculate_growth_rate]
+# 工具优先级: akshare → tushare → yahoo
+FUNDAMENTAL_TOOLS = [get_fundamental_backup, get_fundamental_data, get_fundamental_data_yahoo, calculate_dupont_analysis, calculate_growth_rate]
 
 # 基本面分析 Agent 的系统提示词（使用统一模板）
 FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
@@ -67,10 +67,10 @@ FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
 3. 偿债能力：资产负债率、流动比率、速动比率
 4. 运营效率：资产周转率、权益乘数变化趋势""",
 
-    agent_instructions="""工作流程（Yahoo Finance 优先，国内源兜底）：
-1. **首选**调用 get_fundamental_data_yahoo 获取 Yahoo Finance 数据（美国服务器可正常访问，免费不限流，含 ROE/利润率/营收增速/PE/PB/市值等核心指标）
-2. 如 Yahoo 数据不足，再调用 get_fundamental_backup 获取 akshare 数据补充（东方财富/同花顺，国内源）
-3. 如仍不足，调用 get_fundamental_data 获取 Tushare Pro 数据进一步补充
+    agent_instructions="""工作流程（akshare 国内源优先，Yahoo 兜底）：
+1. **首选**调用 get_fundamental_backup 获取 akshare 数据（东方财富/同花顺国内源，免费不限流，含 ROE/利润率/营收增速/资产负债率等核心财务指标）
+2. 如 akshare 数据不足，调用 get_fundamental_data 获取 Tushare Pro 数据补充
+3. 如仍不足（海外服务器场景），调用 get_fundamental_data_yahoo 获取 Yahoo Finance 数据兜底
 4. 根据获取的数据，必要时调用 calculate_dupont_analysis 进行杜邦拆解
 5. 如数据中包含多年营收/利润数据，调用 calculate_growth_rate 计算 CAGR
 6. 综合所有数据，按五段式模板输出分析报告
@@ -79,7 +79,7 @@ FUNDAMENTAL_SYSTEM_PROMPT = build_system_prompt(
 - 银行股分析需额外关注不良率、拨备覆盖率、净息差、资本充足率等指标
 - 如所有数据接口均返回空，必须在元信息中如实声明，使用 LLM 知识库兜底并标注
 - 杜邦分析和CAGR计算需要从财务数据中提取参数后再调用
-- **数据源优先级**: Yahoo Finance → akshare（国内备选）→ Tushare（最后兜底）
+- **数据源优先级**: akshare（国内主力）→ Tushare（补充）→ Yahoo Finance（海外兜底）
 - **限流处理**：如果 Tushare 返回"调用频次超限"或"限流"错误，不要重试""",
 )
 

@@ -25,15 +25,15 @@ def get_technical_data_backup(ts_code: str) -> str:
     return get_daily_quote_ak(ts_code, days=60)
 
 
-# ---- yfinance 主力数据源（US-friendly，优先使用） ----
+# ---- yfinance 兜底数据源（海外备选，国内服务正常时不需要） ----
 @tool
 def get_technical_data_yahoo(ts_code: str) -> str:
-    """【优先使用】获取股票技术面数据（Yahoo Finance），包括最近60个交易日OHLCV、MA均线、波动率等。从美国服务器可正常访问"""
+    """【兜底】获取股票技术面数据（Yahoo Finance），当国内数据源均不可用时使用。包括最近60个交易日OHLCV、MA均线、波动率等"""
     return get_daily_quote_yahoo(ts_code, days=60)
 
 
-# 工具优先级: yahoo → akshare → tushare
-TECHNICAL_TOOLS = [get_technical_data_yahoo, get_technical_data_backup, get_technical_data]
+# 工具优先级: akshare → tushare → yahoo
+TECHNICAL_TOOLS = [get_technical_data_backup, get_technical_data, get_technical_data_yahoo]
 
 TECHNICAL_SYSTEM_PROMPT = build_system_prompt(
     agent_role="你是一位资深技术分析师，擅长通过量价数据判断股票的技术走势。",
@@ -44,10 +44,10 @@ TECHNICAL_SYSTEM_PROMPT = build_system_prompt(
 3. 波动特征：价格波动率变化趋势，振幅收窄/扩大信号
 4. 关键价位：通过近期高低点识别支撑位和压力位""",
 
-    agent_instructions="""工作流程（Yahoo Finance 优先，国内源兜底）：
-1. **首选**调用 get_technical_data_yahoo 获取 Yahoo Finance 日线行情（美国服务器可正常访问，免费不限流，含60日 OHLCV + MA + 波动率）
-2. 如需要更长的历史数据或 Yahoo 数据不足，再调用 get_technical_data_backup 获取 akshare 日线数据补充
-3. 如仍不足，调用 get_technical_data 获取 Tushare 日线数据进一步补充
+    agent_instructions="""工作流程（akshare 国内源优先，Yahoo 兜底）：
+1. **首选**调用 get_technical_data_backup 获取 akshare 日线数据（国内源，免费不限流，含60日 OHLCV + MA 均线）
+2. 如需要更长的历史数据或 akshare 数据不足，再调用 get_technical_data 获取 Tushare 日线数据补充
+3. 如仍不足（海外服务器场景），调用 get_technical_data_yahoo 获取 Yahoo Finance 日线数据兜底
 4. 基于真实数据计算关键指标：区间涨跌幅、波动率、均线位置
 5. 识别支撑位（近期低点密集区）和压力位（近期高点密集区）
 6. 按五段式模板输出技术分析报告
@@ -56,7 +56,7 @@ TECHNICAL_SYSTEM_PROMPT = build_system_prompt(
 - 必须基于实际 OHLCV 数据计算，不得凭空编造价位
 - 趋势判断需引用具体时间段和价格变化幅度
 - 技术分析不构成买卖建议，需在风险提示中声明
-- **数据源优先级**: Yahoo Finance → akshare（国内备选）→ Tushare（最后兜底）""",
+- **数据源优先级**: akshare（国内主力）→ Tushare（补充）→ Yahoo Finance（海外兜底）""",
 )
 
 TECHNICAL_SYSTEM_PROMPT += TECHNICAL_JSON_SCHEMA

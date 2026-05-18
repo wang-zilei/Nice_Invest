@@ -784,18 +784,34 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         os.environ["QWEN_API_KEY"] = api_key
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
     else:
-        demo_key = os.environ.get("DEMO_API_KEY", "") or _CFG_DEMO_KEY
-        os.environ["OPENAI_API_KEY"] = demo_key
-        os.environ["DEEPSEEK_API_KEY"] = demo_key
-        os.environ["QWEN_API_KEY"] = demo_key
-        logger.info(f"[CONFIG] 使用体验 Key → model={model}")
+        # 三级读取：DEMO_API_KEY → 已有的 OPENAI_API_KEY / DEEPSEEK_API_KEY → config.py
+        demo_key = (
+            os.environ.get("DEMO_API_KEY", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or os.environ.get("DEEPSEEK_API_KEY", "")
+            or _CFG_DEMO_KEY
+        )
+        if demo_key:
+            os.environ["OPENAI_API_KEY"] = demo_key
+            os.environ["DEEPSEEK_API_KEY"] = demo_key
+            os.environ["QWEN_API_KEY"] = demo_key
+            logger.info(f"[CONFIG] 使用体验 Key → model={model}")
+        else:
+            logger.warning(f"[CONFIG] 未找到任何可用的 API Key（DEMO_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY 均为空）")
 
     if base_url:
         os.environ["OPENAI_BASE_URL"] = base_url
         os.environ["DEEPSEEK_BASE_URL"] = base_url
         os.environ["QWEN_BASE_URL"] = base_url
     else:
-        default_url = os.environ.get("DEMO_BASE_URL", "") or _CFG_DEMO_URL or "https://api.deepseek.com/v1"
+        # 四级读取：DEMO_BASE_URL → 已有的 *_BASE_URL → config.py → 默认 DeepSeek
+        default_url = (
+            os.environ.get("DEMO_BASE_URL", "")
+            or os.environ.get("OPENAI_BASE_URL", "")
+            or os.environ.get("DEEPSEEK_BASE_URL", "")
+            or _CFG_DEMO_URL
+            or "https://api.deepseek.com/v1"
+        )
         os.environ["OPENAI_BASE_URL"] = default_url
         os.environ["DEEPSEEK_BASE_URL"] = default_url
         os.environ["QWEN_BASE_URL"] = default_url

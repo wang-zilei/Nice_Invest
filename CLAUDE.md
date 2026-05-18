@@ -1,6 +1,6 @@
 # LangGraph-financial-agent 项目架构
 
-> 最后更新：2026-05-18（项目上线 Render：https://nice-invest.onrender.com）
+> 最后更新：2026-05-19（数据源优先级翻转为 akshare 国内主力 + Sealos 部署后 API Key 读取 Bug 修复 + 环境变量兼容 5 种命名）
 
 ---
 
@@ -11,7 +11,8 @@
 2. MCP/Function Call 工具链集成
 3. 金融场景评测与幻觉检测（**内部工具，不在用户 UI 展示**）
 
-**数据来源**：akshare（东方财富/同花顺，免费不限流）优先 → Tushare Pro 补充（限流时自动降级）
+**数据来源**：akshare（东方财富/同花顺，国内主力）→ Tushare Pro（第一备选）→ yfinance（Yahoo Finance，海外兜底），三级降级策略
+**部署**：Sealos 国内云（镜像仓库：阿里云 ACR），GitHub Actions CI/CD 自动构建推送
 **Web UI**：React 19 + TypeScript + Tailwind CSS 4 + Three.js（3D 动效），后端 FastAPI 提供 REST + SSE
 
 ---
@@ -22,8 +23,9 @@
 |------|------|------|
 | 编排 | LangGraph | Agent 状态机、ReAct 循环编排 |
 | Agent | LangChain + LLM | 4 个分析 Agent + 1 个 Summary Agent（ReAct）+ 1 个评判 Agent |
-| 数据(主) | akshare | 财务摘要、估值参考、日线行情、新闻舆情（东方财富+财联社），免费不限流 |
-| 数据(补) | Tushare Pro SDK | 股票行情、财务指标补充（限流时自动降级） |
+| 数据(主) | akshare | 财务摘要、估值参考、日线行情、新闻舆情（东方财富+财联社），国内源免费不限流 |
+| 数据(备1) | Tushare Pro SDK | 股票行情、财务指标补充（限流时自动降级） |
+| 数据(备2) | yfinance | 股票信息、财务报表、日线行情、新闻舆情（Yahoo Finance），海外兜底，国内服务正常时不需要 |
 | 计算 | 自定义函数 | 杜邦分析、PEG、CAGR、财务比率计算 |
 | 后端 API | FastAPI | REST API + SSE 流式推送 |
 | 前端 | React 19 + TypeScript + Tailwind + Three.js | 3 页 SPA：落地页 → 分析工作台 → 报告页 |
@@ -70,10 +72,10 @@
 
 | Agent | 职责 | 核心工具 | 关键指标 |
 |-------|------|----------|----------|
-| 基本面 | 财务健康分析 | akshare财务摘要(主) + Tushare财务指标(补) + 杜邦/CAGR | ROE、净利率、营收增速、资产负债率 |
-| 技术面 | 量价技术分析 | akshare日线行情(主,60日OHLCV+MA) + Tushare日线(补) | 趋势、量价关系、支撑压力位、波动率 |
-| 估值 | 估值模型与对比 | akshare估值快照(主) + Tushare估值(补) + PEG/流动比率 | PE/PB/PS、PEG、股息率 |
-| 新闻 | 舆情与事件分析 | akshare东方财富个股新闻 + 财联社全球快讯 | 情感分析、重大事件提取、资金面 |
+| 基本面 | 财务健康分析 | akshare财务摘要(主) + Tushare财务指标(备1) + yfinance财务数据(备2) + 杜邦/CAGR | ROE、净利率、营收增速、资产负债率 |
+| 技术面 | 量价技术分析 | akshare日线(主,60日OHLCV+MA) + Tushare日线(备1) + yfinance日线(备2) | 趋势、量价关系、支撑压力位、波动率 |
+| 估值 | 估值模型与对比 | akshare估值快照(主,PE/PB/PS/市值/股息率) + Tushare估值(备1) + yfinance估值(备2) + PEG/流动比率 | PE/PB/PS、PEG、股息率 |
+| 新闻 | 舆情与事件分析 | akshare东方财富个股新闻+财联社快讯(主) + yfinance新闻(备) | 情感分析、重大事件提取、资金面 |
 
 ### Summary Agent（ReAct 模式，含 3 个工具）
 
@@ -100,7 +102,20 @@
 
 ## MCP 工具链
 
-### Tushare Pro 工具（主数据源）
+### akshare 工具（主力数据源，`src/mcp_tools/news_api.py`，15s 超时保护）
+
+| 工具名 | 功能 | 输入 | 输出 |
+|--------|------|------|------|
+| `get_eastmoney_news` | 东方财富个股新闻 | ts_code | 新闻标题+时间+来源 |
+| `get_cls_global_news` | 财联社全球财经快讯 | limit | 市场快讯标题+内容 |
+| `get_combined_news` | 综合新闻（个股+全球） | ts_code | 合并新闻摘要 |
+| `get_daily_quote_ak` | 日线行情 | ts_code | OHLCV + MA均线统计 + 区间涨跌幅 |
+| `get_stock_financial_summary` | 财务摘要 | ts_code | ROE/净利润/营收/负债率 |
+| `get_stock_valuation_snapshot` | 估值参考 | ts_code | 每股净资产/ROE/负债率 |
+
+akshare 采用懒加载模式，所有 API 调用已通过 `_ak_call()` 包裹 15s `concurrent.futures` 超时保护。
+
+### Tushare Pro 工具（第一备选数据源）
 
 | 工具名 | 功能 | 输入 | 输出 |
 |--------|------|------|------|
@@ -109,18 +124,17 @@
 | `get_daily_quote` | 获取日线行情 | ts_code, start_date, end_date | OHLCV 数据 |
 | `search_stock` | 按关键词搜索股票 | keyword | 匹配的股票列表 |
 
-### akshare 工具（新闻 + 限流备选，`src/mcp_tools/news_api.py`）
+### yfinance 工具（海外兜底数据源，`src/mcp_tools/yahoo_api.py`，国内服务正常时不需要）
 
 | 工具名 | 功能 | 输入 | 输出 |
 |--------|------|------|------|
-| `get_eastmoney_news` | 东方财富个股新闻 | ts_code | 新闻标题+时间+来源 |
-| `get_cls_global_news` | 财联社全球财经快讯 | limit | 市场快讯标题+内容 |
-| `get_combined_news` | 综合新闻（个股+全球） | ts_code | 合并新闻摘要 |
-| `get_daily_quote_ak` | 日线行情（akshare，主数据源） | ts_code | OHLCV + MA均线统计 + 区间涨跌幅 |
-| `get_stock_financial_summary` | 财务摘要（akshare，主数据源） | ts_code | ROE/净利润/营收/负债率 |
-| `get_stock_valuation_snapshot` | 估值参考（akshare，主数据源） | ts_code | 每股净资产/ROE/负债率 |
+| `get_stock_info_yahoo` | 股票信息+估值快照 | ts_code | 名称/行业/PE/PB/PS/PEG/股息率/ROE/利润率等 |
+| `get_financials_yahoo` | 财务报表 | ts_code | 年度+季度利润表、资产负债表 |
+| `get_daily_quote_yahoo` | 日线行情 | ts_code, days | 60日 OHLCV + MA均线 + 波动率 |
+| `get_news_yahoo` | 个股新闻 | ts_code, limit | 新闻标题+来源+时间 |
+| `get_comprehensive_yahoo` | 综合快照 | ts_code | 基本信息+估值+行情摘要 |
 
-akshare 采用懒加载模式，未安装时不影响其他模块导入，调用时返回友好错误信息。
+自动将 Tushare 代码格式转为 Yahoo Finance 格式（`.SH` → `.SS`）。懒加载模式，未安装时返回友好错误。
 
 ### 计算工具（Function Call）
 
@@ -289,20 +303,22 @@ LangGraph-financial-agent/
 │   │
 │   ├── agents/
 │   │   ├── __init__.py
-│   │   ├── template.py     ← 六条铁律 + 五段式模板
-│   │   ├── analyst.py      ← 基本面 Agent（4 tools，akshare优先）
-│   │   ├── technical.py    ← 技术面 Agent（2 tools，akshare主+Tushare补）
-│   │   ├── valuation.py    ← 估值 Agent（5 tools，akshare优先）
-│   │   ├── news.py         ← 新闻 Agent（4 tools，akshare）
+│   │   ├── template.py     ← 七条铁律 + 两段式输出 + 5 种 JSON Schema
+│   │   ├── analyst.py      ← 基本面 Agent（5 tools，yfinance主→akshare备1→Tushare备2）
+│   │   ├── technical.py    ← 技术面 Agent（3 tools，yfinance主→akshare备1→Tushare备2）
+│   │   ├── valuation.py    ← 估值 Agent（6 tools，yfinance主→akshare备1→Tushare备2）
+│   │   ├── news.py         ← 新闻 Agent（5 tools，yfinance主→akshare备）
 │   │   └── summary.py      ← Summary Agent（3 tools，ReAct）
 │   │
 │   └── mcp_tools/
 │       ├── __init__.py
+│       ├── yahoo_api.py    ← **yfinance 主力数据源（US-friendly，2026-05-19 新增）**
 │       ├── tushare_api.py  ← Tushare Pro 封装
-│       ├── news_api.py     ← akshare 新闻 + 财务备选
+│       ├── news_api.py     ← akshare 新闻 + 财务/行情备选（15s 超时保护）
 │       └── calculator.py   ← 财务计算函数
 │
-├── web/                    ← React 前端（2026-05-17 Gemini 生成）
+├── .github/workflows/
+│   └── docker-build.yml    ← GitHub Actions CI/CD（2026-05-19 新增）
 │   ├── README.md
 │   ├── package.json
 │   ├── vite.config.ts
@@ -331,7 +347,7 @@ LangGraph-financial-agent/
 ├── logs/                   ← 推理日志
 │
 ├── Dockerfile              ← Docker 多阶段构建（Node 20 前端 + Python 3.11 后端）
-├── render.yaml             ← Render 部署 Blueprint
+├── render.yaml             ← Render 部署 Blueprint（已停用，保留备用）
 ├── Procfile                ← Railway 入口（已停用，保留备用）
 ├── railway.toml            ← Railway 配置（已停用）
 ├── .dockerignore           ← Docker 构建排除规则
@@ -344,12 +360,14 @@ LangGraph-financial-agent/
 
 | 项目 | 信息 |
 |------|------|
-| **平台** | Render（免费套餐） |
-| **线上地址** | https://nice-invest.onrender.com |
-| **构建方式** | Docker 多阶段构建（Dockerfile） |
-| **启动命令** | `python server.py` |
-| **环境变量** | `DEMO_API_KEY`、`DEMO_BASE_URL`（Render Dashboard 配置） |
-| **冷启动** | 15 分钟无请求后休眠，唤醒约 30 秒 |
+| **平台** | Sealos 国内云 |
+| **线上地址** | Sealos 分配域名（如 `xxx.sealos.run`） |
+| **镜像仓库** | 阿里云 ACR（个人版免费，`registry.cn-hangzhou.aliyuncs.com/...`） |
+| **构建方式** | GitHub Actions → Docker 多阶段构建 → 推送 ACR |
+| **CI/CD** | Push master → Actions 自动构建 → Sealos 手动部署（从 ACR 拉取） |
+| **启动命令** | `python server.py`（端口从 `$PORT` 环境变量读取，默认 8000） |
+| **环境变量** | `DEMO_API_KEY`、`DEMO_BASE_URL`、`PORT`（Sealos 控制台配置） |
+| **冷启动** | 无休眠，随时可用 |
 
 ### 体验 Key 最终逻辑
 
@@ -357,7 +375,7 @@ LangGraph-financial-agent/
 用户分析请求 → _apply_llm_config(llm_config)
   ├─ llm_config 有 api_key → 用户自备 Key
   └─ llm_config 无 api_key → 读 DEMO_API_KEY
-       ├─ os.environ.get("DEMO_API_KEY")   ← Render 环境变量（优先）
+       ├─ os.environ.get("DEMO_API_KEY")   ← 部署平台环境变量（优先）
        ├─ config.DEMO_API_KEY              ← 本地开发兜底
        └─ ""                               ← 都没有 → 预检报"未配置 API Key"
 ```
