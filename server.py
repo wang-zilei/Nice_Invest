@@ -798,6 +798,34 @@ async def _preflight_check() -> tuple:
         return False, error_msg[:150]
 
 
+def _resolve_demo_config() -> tuple[str, str, str]:
+    """解析体验 Key 配置，环境变量优先于 config.py 导入。"""
+    def _get(key: str, default: str = "") -> str:
+        # 1. 先读环境变量（Railway / 云平台的标准方式）
+        val = os.environ.get(key, "")
+        if val:
+            logger.info(f"[DEMO] {key} ← 环境变量")
+            return val
+        # 2. 环境变量为空，尝试 config.py 导入
+        try:
+            import importlib
+            cfg = importlib.import_module("config")
+            val = getattr(cfg, key, "")
+            if val and not val.startswith("sk-...") and not val.startswith("your_"):
+                logger.info(f"[DEMO] {key} ← config.py")
+                return val
+        except ImportError:
+            pass
+        # 3. 都没配置，返回默认值
+        logger.info(f"[DEMO] {key} ← 默认值（'default'）")
+        return default
+
+    api_key = _get("DEMO_API_KEY", "")
+    base_url = _get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+    model = _get("DEMO_MODEL", "deepseek-chat")
+    return api_key, base_url, model
+
+
 def _apply_llm_config(llm_config: dict, user_email: str = None):
     """将前端传来的统一 LLM 配置写入环境变量。
 
@@ -816,31 +844,20 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         # 自备 Key 场景：继续设置 base_url 和 model（下面的逻辑会处理）
     elif user_email:
         # 用户没有自备 Key，注入体验 Key（次数已在 analyze() 预检时扣减）
-        try:
-            from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
-        except ImportError:
-            DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
-            DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
-            DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
-        os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
-        os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
-        os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL
-        os.environ["DEFAULT_MODEL"] = DEMO_MODEL
-        logger.info(f"[CONFIG] 使用体验 Key → model={DEMO_MODEL} | 用户已用 {user_store.get_usage(user_email)}/{MAX_FREE_USES} 次")
+        demo_key, demo_url, demo_model = _resolve_demo_config()
+        os.environ["OPENAI_API_KEY"] = demo_key
+        os.environ["DEEPSEEK_API_KEY"] = demo_key
+        os.environ["OPENAI_BASE_URL"] = demo_url
+        os.environ["DEFAULT_MODEL"] = demo_model
+        logger.info(f"[CONFIG] 使用体验 Key → model={demo_model} | 用户已用 {user_store.get_usage(user_email)}/{MAX_FREE_USES} 次")
         return
     else:
         # 无 session，按体验 Key 处理
-        try:
-            from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
-        except ImportError:
-            DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
-            DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
-            DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
-        os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
-        os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
-        os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL
-        os.environ["DEFAULT_MODEL"] = DEMO_MODEL
-        # 体验 Key 已完整配置，直接返回
+        demo_key, demo_url, demo_model = _resolve_demo_config()
+        os.environ["OPENAI_API_KEY"] = demo_key
+        os.environ["DEEPSEEK_API_KEY"] = demo_key
+        os.environ["OPENAI_BASE_URL"] = demo_url
+        os.environ["DEFAULT_MODEL"] = demo_model
         return
 
     if base_url:
