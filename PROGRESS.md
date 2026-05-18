@@ -1,7 +1,7 @@
 # LangGraph-financial-agent 项目进展
 
 > 创建时间：2026-05-15
-> 最后更新：2026-05-18（阶段九）
+> 最后更新：2026-05-18（阶段十）
 > 目标岗位：腾讯金融大模型评测实习生（项目制）
 
 ---
@@ -302,6 +302,47 @@
 - **数据源**：Tushare Pro（真实数据，非 mock）
 - **UI 框架**：Gradio → React 19 + FastAPI（2026-05-17 决策，Gradio 降级为调试入口）
 - **前端来源**：Gemini AI Studio 生成的 Landing + Dashboard 框架
+
+---
+
+## 阶段十：体验 Key 机制简化 & 部署修复（2026-05-18 完成）
+
+### 背景
+Railway 部署后体验 Key（DEMO_API_KEY）不生效，用户在网页未配置 Key 时分析失败。多次排查后发现环境变量读取机制过于复杂（config.py 导入 → env 兜底），且次数限制存在并发绕过漏洞。
+
+### 最终方案
+**去掉次数限制，改为纯环境变量注入**：登录/游客 → 用户没配 Key → 读 `DEMO_API_KEY` 环境变量 → 自动注入。
+
+### 改动清单
+
+| # | 任务 | 状态 | 备注 |
+|---|------|------|------|
+| 10.1 | 移除 MAX_FREE_USES 次数追踪 | ✅ | server.py，不再 increment_usage，取消 429 限制 |
+| 10.2 | 删除 `_resolve_demo_config()` | ✅ | 不再尝试 config.py 导入，只读 os.environ |
+| 10.3 | `_apply_llm_config` 精简 | ✅ | 用户 Key 优先 → 否则读 DEMO_API_KEY 环境变量 |
+| 10.4 | auth 端点字段清理 | ✅ | verify-code / session / usage 去掉 remaining_uses/max_uses |
+| 10.5 | 前端体验次数 UI 移除 | ✅ | Dashboard.tsx 去"剩余 N 次"，ConfigDialog 去"公开体验 API"提示 |
+| 10.6 | 前端重建 dist | ✅ | 清理旧 assets，提交新 dist |
+
+### Bug 修复明细
+
+**B9: 体验 Key 环境变量不生效**
+- 现象：Railway 上配置了 DEMO_API_KEY 但代码读不到，分析报"未配置 API Key"
+- 根因：`from config import DEMO_API_KEY` 优先，ImportError 才读 env；可能存在空 config.py 覆盖
+- 修复：去掉 config.py 导入路径，只读 `os.environ.get("DEMO_API_KEY", "")`
+
+**B10: 并发请求绕过次数限制**
+- 现象：用户 4 秒内发起 2 次分析，usage_count 均为 0，双双通过预检
+- 根因：次数扣减在分析完成后方执行（event_generator 末尾），预检到扣减之间存在时间窗口
+- 修复：改为先扣后检（increment → check > MAX），但最终方案直接去掉次数限制
+
+### 当前体验 Key 工作流
+```
+用户登录(含游客) → 点击分析 → 检查 llm_config 是否有 api_key
+  ├─ 有 → 使用用户自备 Key
+  └─ 无 → 读 DEMO_API_KEY 环境变量 → 注入 → 分析
+                       └─ 无 → preflight 报"未配置 API Key"
+```
 - **Agent 数量**：4 个分析 Agent + 1 个 Summary Agent（ReAct 模式）+ 1 个评判 Agent（独立，不在 UI 展示）
 - **模型支持**：GPT-4o / DeepSeek / Qwen 多模型对比
 - **范围控制**：不做 Docker/K8s/监控，聚焦核心功能
