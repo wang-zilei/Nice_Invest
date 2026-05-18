@@ -7,7 +7,6 @@
 - **4 个分析 Agent 并行执行**：基本面、技术面、估值、新闻
 - **MCP 工具链 + Function Call**：Tushare Pro（主数据源）+ akshare（新闻 + 限流备选）
 - **Summary Agent（ReAct 模式）**：交叉验证 + 数据一致性核实 + 加权综合评分
-- **评判 Agent 多模型对比**：GPT-4o / DeepSeek / Qwen 横向评测（内部工具）
 - **React 19 前端 + FastAPI 后端 + SSE 流式推送**：3 页 SPA（Landing → 分析工作台 → 研报）
 - **两段式输出**：Markdown 正文+ JSON 代码块（前端渲染）
 
