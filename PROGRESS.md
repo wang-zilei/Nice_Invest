@@ -84,7 +84,8 @@
 ✅ **搜索重构 + A股安全护栏（2026-05-18）**：A股注册表（akshare 5517只）+ 搜索框确认按钮 + /api/validate-stock 校验端点 + LLM 模糊识别兜底 + 非A股警告弹窗
 ✅ **阶段十：GitHub 发布 + Railway 部署（2026-05-18）**：前后端合一部署、config 导入修复、Gradio 6.0 兼容、页面标题修复、黑屏修复
 ✅ **阶段十补充2：体验 Key config.py 兜底恢复（2026-05-18）**：_apply_llm_config 恢复 config.py 三级兜底（os.environ → config.py → 默认值），修复 402 错误提示文案，本地+线上双环境验证 PASS
-⬜ 下一步：面试资产整理
+✅ **阶段十补充3：Render 部署切换（2026-05-18）**：Railway nixpacks 构建持续失败 → 添加 Dockerfile + render.yaml → 切 Render Docker 部署 → 部署成功
+🟢 **项目已可正式使用**：https://nice-invest.onrender.com
 
 ### 阶段十：GitHub 发布 + Railway 部署（2026-05-18）
 
@@ -105,12 +106,13 @@
 
 | Bug | 现象 | 根因 | 修复 |
 |-----|------|------|------|
-| B9: ModuleNotFoundError | Railway 启动崩溃 | `config.py` 被 gitignore，线上无此文件，`import config` 直接抛异常 | 5 模块全部 try/except + os.environ 兜底 |
+| B9: ModuleNotFoundError | Railway 启动崩溃 | `config.py` 被 gitignore，线上无此文件 | 5 模块全部 try/except + os.environ 兜底 |
 | B10: Gradio 6.0 IndexError | 持续重启循环 | Railway 自动检测 `main.py` 为入口，Gradio 6.0 Blocks() 不接受 css 参数 | ① css 移至 launch() ② 新增 Procfile 指定 `server.py` |
-| B11: Landing 黑屏 | 页面全黑，仅能盲点进入 | `web/dist/landing.html` 被清理后未重新构建（iframe 加载 404） | 清理 dist 后完整 rebuild，Vite 从 public/ 复制 |
-| B12: 体验 Key 不生效（第一轮） | 免费体验无法使用，分析失败 | `_apply_llm_config` 只设 `OPENAI_BASE_URL`，未设 `DEEPSEEK_BASE_URL`；`get_llm()` deepseek 分支读空 base_url 导致 API 调用失败 | commit d48b7e1：同时设置 OPENAI/DEEPSEEK/QWEN 三组环境变量 + 清理 auth.py 次数限制死代码 |
-| B14: 体验 Key 不生效（第二轮） | 本地 localhost:8000 同样报 402，第一轮修复未解决 | `e2c60f8` 简化时把 `config.py` 兜底逻辑删了，`_apply_llm_config` 只读 `os.environ.get("DEMO_API_KEY", "")`，本地和 Railway 上均未设 OS 环境变量 → 读到空字符串 | commit（本次）：恢复 os.environ → config.py → 默认值 三级兜底，与 `get_llm()` 的读取模式对齐 |
+| B11: Landing 黑屏 | 页面全黑 | `web/dist/landing.html` 被清理后未重新构建 | 清理 dist 后完整 rebuild |
+| B12: 体验 Key 不生效（第一轮） | 分析失败 | `_apply_llm_config` 漏设 `DEEPSEEK_BASE_URL`，`get_llm()` deepseek 分支读空 base_url | 同时设置 OPENAI/DEEPSEEK/QWEN 三组 env var |
 | B13: 页面标题错误 | 标签页显示 "My Google AI Studio App" | index.html title 未修改 | 改为 "Nice Invest" |
+| B14: 体验 Key 不生效（第二轮） | localhost 同样报错 | `e2c60f8` 简化时删了 config.py 兜底，`DEMO_API_KEY` 只从 os.environ 读 | 恢复 os.environ → config.py → 默认值 三级兜底 |
+| B15: Railway 构建失败 | "secret https not found" | Railway nixpacks 基础设施问题 | 添加 Dockerfile，切 Render Docker 部署 |
 
 ### 阶段九补充：Markdown 符号去除与 UI 修复（2026-05-18 本会话）
 

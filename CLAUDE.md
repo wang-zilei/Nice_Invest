@@ -1,6 +1,6 @@
 # LangGraph-financial-agent 项目架构
 
-> 最后更新：2026-05-18（阶段九完成 + UI精修：报告页布局调整/雷达图移除/####清洗/仿宋二级标题/关键指标颜色加深）
+> 最后更新：2026-05-18（项目上线 Render：https://nice-invest.onrender.com）
 
 ---
 
@@ -244,14 +244,14 @@ DEFAULT_MODEL = "gpt-4o"  # 可切换默认模型
 ### 认证与鉴权（2026-05-17 新增）
 - **邮箱验证码登录**：Resend API 发送 6 位验证码（免费 100 封/天），`src/auth.py` 管理 CodeStore/SessionStore/UserStore
 - **Session 管理**：内存存储 24h 过期，前端 localStorage 持久化，Dashboard 401 → 自动退回 Landing
-- **体验 Key 后端化管理**：每用户 2 次限额，后端 `_apply_llm_config()` 根据 session 判断是否注入体验 Key
+- **体验 Key 自动注入**：用户配了 Key → 用自己的；没配 Key → 后端自动注入体验 Key（三级读取：os.environ → config.py → 默认值），无次数限制
 - **4 个 Auth 端点**：`POST /api/auth/send-code`、`POST /api/auth/verify-code`、`GET /api/auth/session`、`GET /api/auth/usage`
 - **Resend 降级**：Resend 发送失败时自动降级为终端打印验证码（`fallback: true` + `dev_code` 返回前端）
 
 ### API 配置策略（2026-05-17）
 - **LLM-only**：用户仅配置模型 + API Key + Base URL，支持任意 OpenAI 兼容端点（DeepSeek/OpenAI/Qwen/第三方代理）
 - **数据源免配置**：优先使用 akshare/东方财富等免费 API；Tushare 在后端可选配置（前端不暴露）
-- **公开体验 Key**：后端管理 DeepSeek 体验 Key，每用户 2 次（后端 `DEMO_MAX_USES_PER_USER` 控制），超限返回 429
+- **公开体验 Key**：后端管理 DeepSeek 体验 Key，无使用次数限制，用户无需配置即可体验
 - **校验端点**：`POST /api/config/validate` 校验 LLM 连接有效性（`request_timeout=10` + `asyncio.wait_for(12s)`）
 
 ### 日志系统（2026-05-17 新增）
@@ -328,5 +328,37 @@ LangGraph-financial-agent/
 │   ├── full_result.json
 │   └── 平安银行-000001-全量分析-20260515.md
 │
-└── logs/                   ← 推理日志
+├── logs/                   ← 推理日志
+│
+├── Dockerfile              ← Docker 多阶段构建（Node 20 前端 + Python 3.11 后端）
+├── render.yaml             ← Render 部署 Blueprint
+├── Procfile                ← Railway 入口（已停用，保留备用）
+├── railway.toml            ← Railway 配置（已停用）
+├── .dockerignore           ← Docker 构建排除规则
+└── requirements.txt        ← Python 依赖
 ```
+
+---
+
+## 部署
+
+| 项目 | 信息 |
+|------|------|
+| **平台** | Render（免费套餐） |
+| **线上地址** | https://nice-invest.onrender.com |
+| **构建方式** | Docker 多阶段构建（Dockerfile） |
+| **启动命令** | `python server.py` |
+| **环境变量** | `DEMO_API_KEY`、`DEMO_BASE_URL`（Render Dashboard 配置） |
+| **冷启动** | 15 分钟无请求后休眠，唤醒约 30 秒 |
+
+### 体验 Key 最终逻辑
+
+```
+用户分析请求 → _apply_llm_config(llm_config)
+  ├─ llm_config 有 api_key → 用户自备 Key
+  └─ llm_config 无 api_key → 读 DEMO_API_KEY
+       ├─ os.environ.get("DEMO_API_KEY")   ← Render 环境变量（优先）
+       ├─ config.DEMO_API_KEY              ← 本地开发兜底
+       └─ ""                               ← 都没有 → 预检报"未配置 API Key"
+```
+无任何次数限制，登录页不变。
