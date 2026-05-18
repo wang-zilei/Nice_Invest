@@ -353,20 +353,25 @@ async def analyze(req: AnalyzeRequest, raw_request: Request):
     if not user_email:
         raise HTTPException(status_code=401, detail="请先登录后再使用分析功能")
 
-    # ---- 体验 Key 鉴权与扣减预检 ----
+    # ---- 体验 Key 鉴权 + 即时扣减（先扣后检，消除并发窗口） ----
     user_config = req.llm_config or {}
     user_has_own_key = bool(user_config.get("api_key") or user_config.get("openai_api_key"))
     user_usage = user_store.get_usage(user_email)
 
-    if not user_has_own_key and user_usage >= MAX_FREE_USES:
-        raise HTTPException(
-            status_code=429,
-            detail=f"体验次数已用完（{user_usage}/{MAX_FREE_USES}），请配置您自己的 API Key 后继续使用。"
-        )
+    if not user_has_own_key:
+        # 先扣减再检查：杜绝并发请求同时通过预检
+        user_usage = user_store.increment_usage(user_email)
+        if user_usage > MAX_FREE_USES:
+            # 超额回滚
+            user_store._store[user_email]["usage_count"] -= 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"体验次数已用完（{MAX_FREE_USES}/{MAX_FREE_USES}），请配置您自己的 API Key 后继续使用。"
+            )
 
     # 生成分析 ID
     analysis_id = str(uuid.uuid4())[:8]
-    logger.info(f"[ANALYZE] 开始 → {stock_code} | 用户={user_email} | 自备Key={user_has_own_key} | 使用次数={user_usage}")
+    logger.info(f"[ANALYZE] 开始 → {stock_code} | 用户={user_email} | 自备Key={user_has_own_key} | 已用次数={user_usage}/{MAX_FREE_USES}")
 
     async def event_generator() -> AsyncGenerator[str, None]:
         """SSE 事件生成器（带超时保护，避免永久挂起）"""
@@ -605,12 +610,8 @@ async def analyze(req: AnalyzeRequest, raw_request: Request):
             # ---- 完成 ----
             elapsed = round(time.time() - started_at, 1)
 
-            # 扣减用户体验次数（仅当使用体验 Key 时）
-            if not user_has_own_key and user_email:
-                new_usage = user_store.increment_usage(user_email)
-                logger.info(f"[ANALYZE] 完成 → {stock_code} | 耗时={elapsed}s | 判定={final_verdict} | 用户={user_email} 已用={new_usage}/{MAX_FREE_USES}")
-            else:
-                logger.info(f"[ANALYZE] 完成 → {stock_code} | 耗时={elapsed}s | 判定={final_verdict}")
+            # 次数扣减已在 analyze() 入口预检处完成（先扣后检，消除并发窗口）
+            logger.info(f"[ANALYZE] 完成 → {stock_code} | 耗时={elapsed}s | 判定={final_verdict}")
 
             # 构建完整历史记录（包含所有分析结果，供历史回放）
             full_record = {
@@ -814,27 +815,19 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
         # 自备 Key 场景：继续设置 base_url 和 model（下面的逻辑会处理）
     elif user_email:
-        # 用户没有自备 Key，检查体验 Key 余量
-        usage = user_store.get_usage(user_email)
-        if usage < MAX_FREE_USES:
-            try:
-                from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
-            except ImportError:
-                DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
-                DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
-                DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
-            os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
-            os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
-            os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL
-            os.environ["DEFAULT_MODEL"] = DEMO_MODEL
-            logger.info(f"[CONFIG] 使用体验 Key → model={DEMO_MODEL} | 用户剩余 {MAX_FREE_USES - usage - 1}/{MAX_FREE_USES} 次")
-            # 体验 Key 已完整配置，直接返回
-            return
-        else:
-            raise HTTPException(
-                status_code=429,
-                detail=f"体验次数已用完，请配置您自己的 API Key"
-            )
+        # 用户没有自备 Key，注入体验 Key（次数已在 analyze() 预检时扣减）
+        try:
+            from config import DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL
+        except ImportError:
+            DEMO_API_KEY = os.environ.get("DEMO_API_KEY", "")
+            DEMO_BASE_URL = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+            DEMO_MODEL = os.environ.get("DEMO_MODEL", "deepseek-chat")
+        os.environ["OPENAI_API_KEY"] = DEMO_API_KEY
+        os.environ["DEEPSEEK_API_KEY"] = DEMO_API_KEY
+        os.environ["OPENAI_BASE_URL"] = DEMO_BASE_URL
+        os.environ["DEFAULT_MODEL"] = DEMO_MODEL
+        logger.info(f"[CONFIG] 使用体验 Key → model={DEMO_MODEL} | 用户已用 {user_store.get_usage(user_email)}/{MAX_FREE_USES} 次")
+        return
     else:
         # 无 session，按体验 Key 处理
         try:
