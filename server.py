@@ -38,7 +38,7 @@ from src.stock_registry import search_registry, validate_stock, get_registry_sta
 # ============================================================
 # FastAPI App
 # ============================================================
-app = FastAPI(title="Nice Invest API", version="0.1.0")
+app = FastAPI(title="Nice Invest API", version="0.2.1")
 
 app.add_middleware(
     CORSMiddleware,
