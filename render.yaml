@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: nice-invest
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEMO_API_KEY
+        sync: false
+      - key: DEMO_BASE_URL
+        sync: false
