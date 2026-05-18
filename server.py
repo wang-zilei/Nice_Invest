@@ -744,7 +744,7 @@ async def _preflight_check() -> tuple:
         error_msg = str(e)
         # 按优先级匹配常见错误
         if "402" in error_msg or "Insufficient Balance" in error_msg or "insufficient" in error_msg.lower():
-            return False, "API 账户余额不足（402），体验 Key 的免费额度已用完。请点击右上角齿轮图标，配置您自己的 API Key 后继续使用"
+            return False, "API 账户余额不足（402）。体验 Key 余额已用尽，请点击右上角齿轮图标配置您自己的 API Key"
         if "401" in error_msg or "Unauthorized" in error_msg or "unauthorized" in error_msg.lower():
             return False, "API Key 无效（401），请检查 Key 是否正确、是否已过期"
         if "403" in error_msg or "Forbidden" in error_msg or "forbidden" in error_msg.lower():
@@ -762,13 +762,21 @@ async def _preflight_check() -> tuple:
 def _apply_llm_config(llm_config: dict, user_email: str = None):
     """将 LLM 配置写入环境变量。用户自备 Key 优先，否则使用后端体验 Key。
 
+    体验 Key 读取优先级：环境变量 DEMO_API_KEY → config.py 兜底
     关键：必须同时设置所有模型族的环境变量（OPENAI/DEEPSEEK/QWEN），
     因为 get_llm() 中不同模型分支读取各自的 env var。
-    线上无 config.py 兜底，漏设任何一个 base_url 都会导致 Agent 执行失败。
+    漏设任何一个 base_url 都会导致 Agent 执行失败。
     """
     api_key = llm_config.get("api_key") or llm_config.get("openai_api_key")
     base_url = llm_config.get("base_url") or llm_config.get("openai_base_url")
     model = llm_config.get("model", "deepseek-chat")
+
+    # 体验 Key 从 config.py 兜底（本地开发时环境变量通常不设）
+    try:
+        from config import DEMO_API_KEY as _CFG_DEMO_KEY, DEMO_BASE_URL as _CFG_DEMO_URL
+    except ImportError:
+        _CFG_DEMO_KEY = ""
+        _CFG_DEMO_URL = ""
 
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
@@ -776,7 +784,7 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         os.environ["QWEN_API_KEY"] = api_key
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
     else:
-        demo_key = os.environ.get("DEMO_API_KEY", "")
+        demo_key = os.environ.get("DEMO_API_KEY", "") or _CFG_DEMO_KEY
         os.environ["OPENAI_API_KEY"] = demo_key
         os.environ["DEEPSEEK_API_KEY"] = demo_key
         os.environ["QWEN_API_KEY"] = demo_key
@@ -787,7 +795,7 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         os.environ["DEEPSEEK_BASE_URL"] = base_url
         os.environ["QWEN_BASE_URL"] = base_url
     else:
-        default_url = os.environ.get("DEMO_BASE_URL", "https://api.deepseek.com/v1")
+        default_url = os.environ.get("DEMO_BASE_URL", "") or _CFG_DEMO_URL or "https://api.deepseek.com/v1"
         os.environ["OPENAI_BASE_URL"] = default_url
         os.environ["DEEPSEEK_BASE_URL"] = default_url
         os.environ["QWEN_BASE_URL"] = default_url

@@ -201,7 +201,7 @@ def run_agent_react(agent_type: str, state: AnalysisState) -> str:
                     raise RuntimeError(f"[{agent_type}] LLM 请求超时（{LLM_TIMEOUT}秒），请检查 API 连接或网络状态")
                 # 翻译常见 API 错误
                 if "402" in error_msg or "Insufficient Balance" in error_msg:
-                    raise RuntimeError(f"[{agent_type}] API 账户余额不足（402），体验 Key 的免费额度已用完。请配置自己的 API Key 后继续使用")
+                    raise RuntimeError(f"[{agent_type}] API 账户余额不足（402）。请检查 API Key 余额或配置自己的 Key")
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     raise RuntimeError(f"[{agent_type}] API Key 无效（401），请检查 Key 是否正确或已过期")
                 if "403" in error_msg or "Forbidden" in error_msg:
