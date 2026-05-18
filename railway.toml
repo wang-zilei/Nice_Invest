@@ -1,5 +1,6 @@
 [build]
-builder = "nixpacks"
+builder = "docker"
 
 [deploy]
 startCommand = "python server.py"
+healthcheckPath = "/api/health"
