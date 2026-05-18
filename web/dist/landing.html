@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invest Multi-Agent | Galaxy Intelligence</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: Arial, sans-serif; }
+        #container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* 经典第一版排版 */
+        .content {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            text-align: center;
+            pointer-events: none;
+        }
+        h1 {
+            font-size: 4.5rem;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+            letter-spacing: 2px;
+            text-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+        }
+        .subtitle {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 10px;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="container"></div>
+    
+    <div class="content">
+        <h1>Invest Multi-Agent</h1>
+        <div class="subtitle">DATA-DRIVEN INTELLIGENCE FLOW</div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- 配置 ---
+        const P_COUNT = 100000; // 极高密度粒子
+        const K_COUNT = 60;    // 真实K线数量
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        camera.position.z = 8;
+        const mouse = new THREE.Vector2(-999, -999);
+        const smoothMouse = new THREE.Vector2(-999, -999);
+
+        // --- 1. 底层：真实的金融 K 线与均线系统 ---
+        const kGroup = new THREE.Group();
+        let lastC = 0;
+        const prices = [];
+        
+        // 生成真实数据逻辑
+        for(let i=0; i<K_COUNT; i++) {
+            const o = lastC + (Math.random()-0.5)*2;
+            const c = o + (Math.random()-0.5)*1.5;
+            const h = Math.max(o, c) + Math.random();
+            const l = Math.min(o, c) - Math.random();
+            const x = (i - K_COUNT/2) * 0.28;
+            prices.push({o, c, h, l, x});
+            lastC = c;
+        }
+
+        const kMat = new THREE.ShaderMaterial({
+            uniforms: { uMouse: { value: smoothMouse } },
+            vertexShader: `
+                varying vec3 vWorldPos;
+                void main() {
+                    vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec2 uMouse;
+                varying vec3 vWorldPos;
+                void main() {
+                    float d = distance(uMouse * 8.0, vWorldPos.xy);
+                    float alpha = smoothstep(2.5, 0.5, d); // 仅在鼠标周围显影
+                    gl_FragColor = vec4(gl_FragColor.rgb, alpha);
+                }
+            `,
+            transparent: true, depthWrite: false
+        });
+
+        prices.forEach(p => {
+            const isUp = p.c >= p.o;
+            const color = isUp ? new THREE.Color(0x00ffaa) : new THREE.Color(0xff3355);
+            
+            // K线实体
+            const bodyGeo = new THREE.BoxGeometry(0.12, Math.abs(p.o-p.c)+0.05, 0.1);
+            const body = new THREE.Mesh(bodyGeo, kMat.clone());
+            body.material.fragmentShader = kMat.fragmentShader.replace('gl_FragColor.rgb', `vec3(${color.r}, ${color.g}, ${color.b})`);
+            body.position.set(p.x, (p.o+p.c)*0.3, -1);
+            kGroup.add(body);
+
+            // 影线
+            const wickGeo = new THREE.CylinderGeometry(0.01, 0.01, p.h - p.l);
+            const wick = new THREE.Mesh(wickGeo, body.material);
+            wick.position.set(p.x, (p.h+p.l)*0.3, -1);
+            kGroup.add(wick);
+        });
+
+        // 均线计算与绘制
+        const createMA = (period, color) => {
+            const pts = [];
+            for(let i=period; i<prices.length; i++) {
+                const avg = prices.slice(i-period, i).reduce((a,b)=>a+b.c, 0)/period;
+                pts.push(new THREE.Vector3(prices[i].x, avg*0.6, -1.05));
+            }
+            const curve = new THREE.CatmullRomCurve3(pts);
+            const lineGeo = new THREE.TubeGeometry(curve, 100, 0.012, 8, false);
+            const lineMat = kMat.clone();
+            lineMat.fragmentShader = kMat.fragmentShader.replace('gl_FragColor.rgb', `vec3(${color.r}, ${color.g}, ${color.b})`);
+            const line = new THREE.Mesh(lineGeo, lineMat);
+            kGroup.add(line);
+        };
+        createMA(5, new THREE.Color(0xffaa00));
+        createMA(15, new THREE.Color(0xff00ff));
+        scene.add(kGroup);
+
+        // --- 2. 银河条带状粒子迷雾 (Gaussian Splat) ---
+        const pGeo = new THREE.BufferGeometry();
+        const posArr = new Float32Array(P_COUNT * 3);
+        const randArr = new Float32Array(P_COUNT * 3);
+
+        for (let i = 0; i < P_COUNT; i++) {
+            // 算法生成不规则条带状：围绕几条正弦曲线分布
+            const stripIdx = Math.floor(Math.random() * 3);
+            const t = (Math.random() - 0.5) * 25;
+            const wave = Math.sin(t * 0.3 + stripIdx) * 2.0;
+            
+            posArr[i*3] = t;
+            posArr[i*3+1] = wave + (Math.random()-0.5) * (3.0 + Math.abs(t)*0.2); // 随机宽度
+            posArr[i*3+2] = (Math.random()-0.5) * 3 + 1.5;
+
+            randArr[i*3] = Math.random(); // 闪烁频率相位
+            randArr[i*3+1] = 0.5 + Math.random() * 1.5; // 基础大小
+            randArr[i*3+2] = Math.random(); // 颜色扰动
+        }
+
+        pGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+        pGeo.setAttribute('aRandom', new THREE.BufferAttribute(randArr, 3));
+
+        const pMat = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 }, uMouse: { value: smoothMouse } },
+            vertexShader: `
+                uniform float uTime;
+                uniform vec2 uMouse;
+                attribute vec3 aRandom;
+                varying float vAlpha;
+                varying vec3 vColor;
+
+                void main() {
+                    vec3 pos = position;
+                    vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+                    vec4 projPos = projectionMatrix * mvPos;
+                    vec2 screenPos = projPos.xy / projPos.w;
+
+                    float dist = distance(uMouse, screenPos);
+                    float pushArea = 0.45;
+
+                    // 核心物理吹散效果：(1.0 - dist/r)^2
+                    if(dist < pushArea) {
+                        float force = pow(1.0 - dist/pushArea, 2.0);
+                        vec2 dir = normalize(screenPos - uMouse);
+                        pos.xy += dir * force * 2.5; 
+                        pos.z += force * 1.2;
+                    }
+
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                    
+                    // 动态星光闪烁效果
+                    float twinkle = 0.4 + 0.6 * sin(uTime * 2.0 + aRandom.x * 10.0);
+                    vAlpha = smoothstep(0.05, 0.4, dist) * twinkle * 0.6;
+                    
+                    vColor = mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), aRandom.z);
+                    gl_PointSize = aRandom.y * (12.0 / -mvPos.z);
+                }
+            `,
+            fragmentShader: `
+                varying float vAlpha;
+                varying vec3 vColor;
+                void main() {
+                    float d = distance(gl_PointCoord, vec2(0.5));
+                    if(d > 0.5) discard;
+                    // 高斯泼溅效果
+                    float g = exp(-d * d * 20.0);
+                    gl_FragColor = vec4(vColor, g * vAlpha);
+                }
+            `,
+            transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+
+        const mist = new THREE.Points(pGeo, pMat);
+        scene.add(mist);
+
+        // --- 3. 交互与平滑动画 ---
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        const clock = new THREE.Clock();
+        function animate() {
+            const time = clock.getElapsedTime();
+            smoothMouse.lerp(mouse, 0.08);
+
+            pMat.uniforms.uTime.value = time;
+            pMat.uniforms.uMouse.value = smoothMouse;
+            
+            kGroup.children.forEach(child => {
+                if(child.material.uniforms) child.material.uniforms.uMouse.value = smoothMouse;
+            });
+
+            // 极细微的 3D 视差，不影响观感
+            scene.rotation.y = smoothMouse.x * 0.03;
+            scene.rotation.x = -smoothMouse.y * 0.03;
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
