@@ -784,18 +784,31 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         os.environ["QWEN_API_KEY"] = api_key
         logger.info(f"[CONFIG] 使用用户自备 Key → model={model}")
     else:
-        # 三级读取：DEMO_API_KEY → 已有的 OPENAI_API_KEY / DEEPSEEK_API_KEY → config.py
+        # 诊断日志：打印所有环境变量读取状态（Key 脱敏只显示前 8 位）
+        _raw_demo = os.environ.get("DEMO_API_KEY", "")
+        _raw_openai = os.environ.get("OPENAI_API_KEY", "")
+        _raw_deepseek = os.environ.get("DEEPSEEK_API_KEY", "")
+        logger.info(
+            f"[CONFIG] 环境变量诊断: "
+            f"DEMO_API_KEY={'SET:' + _raw_demo[:8] + '***' if _raw_demo else 'EMPTY'}, "
+            f"OPENAI_API_KEY={'SET:' + _raw_openai[:8] + '***' if _raw_openai else 'EMPTY'}, "
+            f"DEEPSEEK_API_KEY={'SET:' + _raw_deepseek[:8] + '***' if _raw_deepseek else 'EMPTY'}"
+        )
+
+        # 五级读取：DEMO_API_KEY → OPENAI_API_KEY → DEEPSEEK_API_KEY → config.py → 硬编码兜底
+        _HARDCODED_FALLBACK_KEY = "sk-9275a33679d64851ae172a9cd6327e56"
         demo_key = (
             os.environ.get("DEMO_API_KEY", "")
             or os.environ.get("OPENAI_API_KEY", "")
             or os.environ.get("DEEPSEEK_API_KEY", "")
             or _CFG_DEMO_KEY
+            or _HARDCODED_FALLBACK_KEY
         )
         if demo_key:
             os.environ["OPENAI_API_KEY"] = demo_key
             os.environ["DEEPSEEK_API_KEY"] = demo_key
             os.environ["QWEN_API_KEY"] = demo_key
-            logger.info(f"[CONFIG] 使用体验 Key → model={model}")
+            logger.info(f"[CONFIG] 使用体验 Key → model={model} | key_prefix={demo_key[:8]}***")
         else:
             logger.warning(f"[CONFIG] 未找到任何可用的 API Key（DEMO_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY 均为空）")
 
@@ -804,6 +817,17 @@ def _apply_llm_config(llm_config: dict, user_email: str = None):
         os.environ["DEEPSEEK_BASE_URL"] = base_url
         os.environ["QWEN_BASE_URL"] = base_url
     else:
+        # 诊断日志：打印 Base URL 环境变量读取状态
+        _raw_demo_url = os.environ.get("DEMO_BASE_URL", "")
+        _raw_openai_url = os.environ.get("OPENAI_BASE_URL", "")
+        _raw_ds_url = os.environ.get("DEEPSEEK_BASE_URL", "")
+        logger.info(
+            f"[CONFIG] Base URL 诊断: "
+            f"DEMO_BASE_URL={'SET:' + _raw_demo_url if _raw_demo_url else 'EMPTY'}, "
+            f"OPENAI_BASE_URL={'SET:' + _raw_openai_url if _raw_openai_url else 'EMPTY'}, "
+            f"DEEPSEEK_BASE_URL={'SET:' + _raw_ds_url if _raw_ds_url else 'EMPTY'}"
+        )
+
         # 四级读取：DEMO_BASE_URL → 已有的 *_BASE_URL → config.py → 默认 DeepSeek
         default_url = (
             os.environ.get("DEMO_BASE_URL", "")
