@@ -8,7 +8,7 @@
 |------|------|------|
 | Landing | `/` | 3D K 线背景，品牌入口 |
 | Dashboard | `/dashboard` | 股票搜索（防抖 Top-5）+ Agent 卡片（SSE 实时进度）+ 配置面板 + 历史记录 + Agent 详情 Modal |
-| Report | `/report` | 研报风格：综合评分 + 雷达图/柱状图 + 交叉分析 + 情景分析 + 风险清单 + PDF 导出 |
+| Report | `/report` | 研报风格：综合评分（总分圆+内联评分条）+ 交叉分析 + 情景分析 + 风险清单 |
 
 ## 运行
 
@@ -27,7 +27,7 @@ npm run dev
 - Three.js（Landing 页 3D K 线背景）
 - motion（动画库）
 - lucide-react（图标）
-- 纯 SVG 图表（雷达图 + 柱状图，零依赖）
+- 纯 SVG 图表（评分条/总分圆，零依赖）
 
 ## 设计约束
 

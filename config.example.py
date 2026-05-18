@@ -18,8 +18,7 @@ DEFAULT_MODEL = "gpt-4o"
 # Resend API Key（注册 https://resend.com 免费 100 封/天）
 RESEND_API_KEY = "re_placeholder_..."
 
-# 用户共享体验 Key（提供给没有自己 API Key 的用户体验用）
+# 用户共享体验 Key（提供给没有自己 API Key 的用户体验用，无次数限制）
+# 本地开发时填入此文件（config.py）；线上通过 Render 环境变量注入
 DEMO_API_KEY = "sk-..."
-DEMO_BASE_URL = "https://api.deepseek.com"
-DEMO_MODEL = "deepseek-chat"
-DEMO_MAX_USES_PER_USER = 2
+DEMO_BASE_URL = "https://api.deepseek.com/v1"
