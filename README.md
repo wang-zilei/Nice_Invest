@@ -9,7 +9,7 @@
 - **Summary Agent（ReAct 模式）**：交叉验证 + 数据一致性核实 + 加权综合评分
 - **React 19 前端 + FastAPI 后端 + SSE 流式推送**：3 页 SPA（Landing → 分析工作台 → 研报）
 - **两段式输出**：Markdown 正文+ JSON 代码块（前端渲染）
-- **线上体验**：Sealos 国内云部署（原 Render 地址已停用：数据源从美国无法访问中国金融 API）
+- **线上体验**：Sealos 国内云部署 https://hwaxlfhqrwzm.sealoshzh.site/
 
 ## 快速开始
 
