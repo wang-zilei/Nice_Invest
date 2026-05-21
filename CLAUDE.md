@@ -1,6 +1,6 @@
 # LangGraph-financial-agent 项目架构
 
-> 最后更新：2026-05-19（数据源优先级翻转为 akshare 国内主力 + Sealos 部署后 API Key 读取 Bug 修复 + 环境变量兼容 5 种命名）
+> 最后更新：2026-05-20（Guidance 文档体系建立 + 目录结构精简）
 
 ---
 
@@ -281,77 +281,67 @@ DEFAULT_MODEL = "gpt-4o"  # 可切换默认模型
 
 ---
 
-## 目录结构
+## 文件索引
+
+详细目录结构见 [Guidance/architecture.md](Guidance/architecture.md)，以下为核心文件速查：
 
 ```
 LangGraph-financial-agent/
 ├── CLAUDE.md              ← 本文件
-├── PROGRESS.md            ← 进度看板
+├── PROGRESS.md            ← 进度看板（完整版）
 ├── README.md              ← 安装/运行说明
 ├── requirements.txt       ← Python 依赖
 ├── config.example.py      ← 配置模板
 ├── config.py              ← 实际配置（gitignore）
-├── main.py                ← Gradio 调试入口（开发用，非正式 UI）
-├── server.py              ← FastAPI 后端入口（正式 API，已创建）
+├── main.py                ← Gradio 调试入口（开发用）
+├── server.py              ← FastAPI 后端入口（正式 API）
+│
+├── Guidance/              ← 项目文档目录（2026-05-20 新增）
+│   ├── PROGRESS.md        ← 阶段进度精简版
+│   ├── bug-log.md         ← Bug 记录（B1-B17 + C1-C3 + U1）
+│   ├── pattern-library.md ← 解决范式库（P1-P12）
+│   ├── project-log.md     ← 对话日志
+│   └── architecture.md    ← 文件层级说明
 │
 ├── src/
 │   ├── __init__.py
 │   ├── graph.py            ← LangGraph 编排图
 │   ├── state.py            ← 全局状态定义
-│   ├── auth.py             ← 邮箱验证码登录（CodeStore/SessionStore/UserStore）+ Resend 邮件
+│   ├── auth.py             ← 邮箱验证码登录 + Resend 邮件
 │   ├── logger.py           ← 结构化日志（终端彩色 + 文件）
+│   ├── stock_registry.py   ← A 股注册表（5517 只，本地缓存）
 │   │
 │   ├── agents/
-│   │   ├── __init__.py
-│   │   ├── template.py     ← 七条铁律 + 两段式输出 + 5 种 JSON Schema
-│   │   ├── analyst.py      ← 基本面 Agent（5 tools，yfinance主→akshare备1→Tushare备2）
-│   │   ├── technical.py    ← 技术面 Agent（3 tools，yfinance主→akshare备1→Tushare备2）
-│   │   ├── valuation.py    ← 估值 Agent（6 tools，yfinance主→akshare备1→Tushare备2）
-│   │   ├── news.py         ← 新闻 Agent（5 tools，yfinance主→akshare备）
-│   │   └── summary.py      ← Summary Agent（3 tools，ReAct）
+│   │   ├── template.py     ← 七条铁律 + 两段式 + 5 种 JSON Schema
+│   │   ├── analyst.py      ← 基本面（akshare主→Tushare备1→yfinance备2）
+│   │   ├── technical.py    ← 技术面（akshare主→Tushare备1→yfinance备2）
+│   │   ├── valuation.py    ← 估值（akshare主→Tushare备1→yfinance备2）
+│   │   ├── news.py         ← 新闻（akshare主→yfinance备）
+│   │   └── summary.py      ← Summary（ReAct + 3 tools）
 │   │
 │   └── mcp_tools/
-│       ├── __init__.py
-│       ├── yahoo_api.py    ← **yfinance 主力数据源（US-friendly，2026-05-19 新增）**
-│       ├── tushare_api.py  ← Tushare Pro 封装
-│       ├── news_api.py     ← akshare 新闻 + 财务/行情备选（15s 超时保护）
-│       └── calculator.py   ← 财务计算函数
+│       ├── yahoo_api.py    ← yfinance 兜底
+│       ├── tushare_api.py  ← Tushare Pro
+│       ├── news_api.py     ← akshare 新闻 + 财务/行情（15s 超时）
+│       └── calculator.py   ← 财务计算
+│
+├── web/                   ← React 19 SPA
+│   ├── src/pages/
+│   │   ├── Landing.tsx    ← 落地页（确定性 K 线）
+│   │   ├── Login.tsx      ← 邮箱验证码登录
+│   │   ├── Dashboard.tsx  ← 分析工作台
+│   │   └── Report.tsx     ← 报告页
+│   └── src/lib/
+│       ├── api.ts          ← REST + SSE + Auth
+│       └── charts.tsx      ← SVG 图表
 │
 ├── .github/workflows/
-│   └── docker-build.yml    ← GitHub Actions CI/CD（2026-05-19 新增）
-│   ├── README.md
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── index.html
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx          ← 页面路由（Landing → Login → Dashboard → Report）
-│       ├── index.css        ← Tailwind + 设计令牌
-│       ├── lib/api.ts       ← API 调用层（REST + SSE + Auth API，已接入后端）
-│       ├── lib/
-│       │   ├── api.ts        ← API 调用层（REST + SSE 解析 + Auth）
-│       │   └── charts.tsx    ← SVG 图表组件（雷达图/柱状图，零依赖）
-│       └── pages/
-│           ├── Landing.tsx   ← 落地页（确定性K线+动态发光+Playfair Display）
-│           ├── Login.tsx     ← 邮箱验证码登录（两步流程 + Resend 降级 + Nice Invest 品牌）
-│           ├── Dashboard.tsx ← 分析工作台（始终 header 布局无空闲页；session鉴权+SSE+Agent网格+配置+历史+Modal+退出登录）
-│           └── Report.tsx    ← 报告页（分析报告前置+综合评分紧跟+总分圆+内联评分条居中；无雷达图/柱状图）
+│   └── docker-build.yml   ← CI/CD（阿里云 ACR）
 │
-├── tests/                   ← 测试脚本与报告
-│   ├── README.md
-│   ├── run_and_save.py
-│   ├── test_structural.py
-│   ├── full_result.json
-│   └── 平安银行-000001-全量分析-20260515.md
-│
-├── logs/                   ← 推理日志
-│
-├── Dockerfile              ← Docker 多阶段构建（Node 20 前端 + Python 3.11 后端）
-├── render.yaml             ← Render 部署 Blueprint（已停用，保留备用）
-├── Procfile                ← Railway 入口（已停用，保留备用）
-├── railway.toml            ← Railway 配置（已停用）
-├── .dockerignore           ← Docker 构建排除规则
-└── requirements.txt        ← Python 依赖
+├── tests/                 ← 测试报告
+├── logs/                  ← 推理日志
+├── Dockerfile             ← 多阶段构建
+└── .dockerignore
 ```
 
 ---

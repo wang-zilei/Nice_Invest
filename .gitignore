@@ -62,3 +62,8 @@ logs/*.json
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ============================================================
+# AI Assistant Local Docs (not for public repo)
+# ============================================================
+Claude-Code-Harness-优化指南.md

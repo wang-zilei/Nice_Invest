@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: nice-invest
-    env: docker
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/health
