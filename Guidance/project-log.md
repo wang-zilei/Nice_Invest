@@ -56,3 +56,15 @@
   - 平安银行 000001.SZ 全量分析 PASS
   - 结构回归测试 62 PASS 0 FAIL
 - **产出文件**：`tests/` 测试报告
+
+## 2026-05-26 - Landing page stabilization + mist refinement
+
+- **主题**：公开站点落地页体验修复与视觉微调
+- **关键内容**：
+  - 修复根路径自动进入 Dashboard 的问题：访问 `/` 先停留在 Landing，点击入口后再检查 session。
+  - 移除落地页首次加载时的整体翻转：将 `mouse/smoothMouse` 初始值从极端坐标改为中心点，并加 `hasPointer` 防护。
+  - 移除粒子时间驱动入场闪烁：不再依赖 `uTime/getElapsedTime`，粒子亮度改为稳定随机值。
+  - 约束随机 K 线纵向位置：生成后按整体中心归零，使 K 线稳定围绕标题作为背景。
+  - 初步柔化 Gaussian mist 鼠标交互：去掉固定半径硬光圈，改为高斯衰减的轻雾拨开效果。
+- **Git 检查点**：`7d927d3 Stabilize landing page entry` 保存了稳定落地页状态；之后的 mist 参数微调仍为未提交工作区改动。
+- **产出文件**：`web/src/App.tsx`、`web/src/pages/Landing.tsx`、`web/public/landing.html`、`web/dist/landing.html`

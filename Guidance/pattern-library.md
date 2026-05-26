@@ -129,3 +129,15 @@
 - **方案**：`css` 参数从 `Blocks()` 移至 `launch()` 方法
 - **适用**：Gradio 升级到 6.0+ 的项目
 - **来源**：B10
+
+## P13: Three.js landing page stabilization
+
+- **场景**：落地页使用 Three.js 粒子/K 线背景时，随机初始值和时间驱动动画容易造成首屏翻转、闪烁、主体偏移或硬边交互。
+- **方案**：
+  1. 根路径保持 Landing 为第一屏，点击入口后再做 session 检查。
+  2. 鼠标/视差初始值使用中心点 `(0, 0)`，用 `hasPointer` 控制是否启用视差，避免首屏极端旋转。
+  3. 粒子亮度避免从 `uTime = 0` 开始变化；需要稳定首屏时，用随机属性决定基础亮度。
+  4. K 线随机生成后计算 `kCenter`，对 OHLC 整体归一，让视觉主体围绕标题中心。
+  5. 鼠标影响迷雾时避免固定半径硬阈值，优先使用 `exp(-dist * dist * k)` 这类高斯衰减做柔和过渡。
+- **适用**：沉浸式 landing、canvas/WebGL 背景、粒子雾效、鼠标视差交互。
+- **来源**：2026-05-26 landing polish，`web/public/landing.html`。

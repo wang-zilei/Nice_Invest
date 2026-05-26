@@ -184,21 +184,21 @@
                     vec2 screenPos = projPos.xy / projPos.w;
 
                     float dist = distance(uMouse, screenPos);
-                    float pushArea = 0.45;
+                    float mistFalloff = exp(-dist * dist * 4.5);
+                    float drift = exp(-dist * dist * 7.5);
 
                     // 核心物理吹散效果：(1.0 - dist/r)^2
-                    if(dist < pushArea) {
-                        float force = pow(1.0 - dist/pushArea, 2.0);
-                        vec2 dir = normalize(screenPos - uMouse);
-                        pos.xy += dir * force * 2.5; 
-                        pos.z += force * 1.2;
-                    }
+                    vec2 dir = normalize(screenPos - uMouse + vec2(0.001));
+                    pos.xy += dir * drift * 0.55;
+                    pos.z += drift * 0.22;
 
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
                     
                     // 动态星光闪烁效果
                     float twinkle = 0.7 + 0.3 * aRandom.x;
-                    vAlpha = smoothstep(0.05, 0.4, dist) * twinkle * 0.6;
+                    float airyReveal = mix(0.46, 1.0, mistFalloff);
+                    float veil = 0.78 + 0.22 * smoothstep(0.0, 0.85, dist);
+                    vAlpha = twinkle * airyReveal * veil * 0.46;
                     
                     vColor = mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), aRandom.z);
                     gl_PointSize = aRandom.y * (12.0 / -mvPos.z);
