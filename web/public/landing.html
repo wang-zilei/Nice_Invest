@@ -61,8 +61,9 @@
         document.getElementById('container').appendChild(renderer.domElement);
 
         camera.position.z = 8;
-        const mouse = new THREE.Vector2(-999, -999);
-        const smoothMouse = new THREE.Vector2(-999, -999);
+        const mouse = new THREE.Vector2(0, 0);
+        const smoothMouse = new THREE.Vector2(0, 0);
+        let hasPointer = false;
 
         // --- 1. 底层：真实的金融 K 线与均线系统 ---
         const kGroup = new THREE.Group();
@@ -79,6 +80,14 @@
             prices.push({o, c, h, l, x});
             lastC = c;
         }
+
+        const kCenter = prices.reduce((sum, p) => sum + (p.o + p.c + p.h + p.l) / 4, 0) / prices.length;
+        prices.forEach(p => {
+            p.o -= kCenter;
+            p.c -= kCenter;
+            p.h -= kCenter;
+            p.l -= kCenter;
+        });
 
         const kMat = new THREE.ShaderMaterial({
             uniforms: { uMouse: { value: smoothMouse } },
@@ -161,9 +170,8 @@
         pGeo.setAttribute('aRandom', new THREE.BufferAttribute(randArr, 3));
 
         const pMat = new THREE.ShaderMaterial({
-            uniforms: { uTime: { value: 0 }, uMouse: { value: smoothMouse } },
+            uniforms: { uMouse: { value: smoothMouse } },
             vertexShader: `
-                uniform float uTime;
                 uniform vec2 uMouse;
                 attribute vec3 aRandom;
                 varying float vAlpha;
@@ -189,7 +197,7 @@
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
                     
                     // 动态星光闪烁效果
-                    float twinkle = 0.4 + 0.6 * sin(uTime * 2.0 + aRandom.x * 10.0);
+                    float twinkle = 0.7 + 0.3 * aRandom.x;
                     vAlpha = smoothstep(0.05, 0.4, dist) * twinkle * 0.6;
                     
                     vColor = mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), aRandom.z);
@@ -215,16 +223,14 @@
 
         // --- 3. 交互与平滑动画 ---
         window.addEventListener('mousemove', (e) => {
+            hasPointer = true;
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         });
 
-        const clock = new THREE.Clock();
         function animate() {
-            const time = clock.getElapsedTime();
             smoothMouse.lerp(mouse, 0.08);
 
-            pMat.uniforms.uTime.value = time;
             pMat.uniforms.uMouse.value = smoothMouse;
             
             kGroup.children.forEach(child => {
@@ -232,8 +238,8 @@
             });
 
             // 极细微的 3D 视差，不影响观感
-            scene.rotation.y = smoothMouse.x * 0.03;
-            scene.rotation.x = -smoothMouse.y * 0.03;
+            scene.rotation.y = hasPointer ? smoothMouse.x * 0.03 : 0;
+            scene.rotation.x = hasPointer ? -smoothMouse.y * 0.03 : 0;
 
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
