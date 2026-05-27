@@ -68,3 +68,12 @@
   - 初步柔化 Gaussian mist 鼠标交互：去掉固定半径硬光圈，改为高斯衰减的轻雾拨开效果。
 - **Git 检查点**：`7d927d3 Stabilize landing page entry` 保存了稳定落地页状态；之后的 mist 参数微调仍为未提交工作区改动。
 - **产出文件**：`web/src/App.tsx`、`web/src/pages/Landing.tsx`、`web/public/landing.html`、`web/dist/landing.html`
+
+## 2026-05-27 - Report page polish
+
+- **主题**：报告详情页信息层级与返回状态修复
+- **关键内容**：
+  - 去掉报告标题状态行左侧的方向箭头/趋势 icon，只保留文字结论。
+  - 移除报告正文之后单独的“风险清单”模块，避免与正文第五段风险清单重复。
+  - 从报告页点击“返回分析工作台”时保留 Dashboard 已完成分析状态，不回到空白初始页。
+- **产出文件**：`web/src/App.tsx`、`web/src/pages/Report.tsx`

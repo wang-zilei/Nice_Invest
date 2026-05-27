@@ -75,8 +75,10 @@ export default function App() {
       {currentPage === "login" && (
         <Login onBack={handleBackToLandingFromLogin} onLoginSuccess={handleLoginSuccess} />
       )}
-      {currentPage === "dashboard" && (
-        <Dashboard onViewReport={handleViewReport} onLogout={handleLogout} />
+      {(currentPage === "dashboard" || currentPage === "report") && (
+        <div className={currentPage === "dashboard" ? "h-full" : "hidden"}>
+          <Dashboard onViewReport={handleViewReport} onLogout={handleLogout} />
+        </div>
       )}
       {currentPage === "report" && (
         <Report
