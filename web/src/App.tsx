@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Landing from "@/src/pages/Landing";
 import Login from "@/src/pages/Login";
 import Dashboard from "@/src/pages/Dashboard";
@@ -22,27 +22,30 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
-  // 启动时检查 session 有效性
-  useEffect(() => {
+  const handleEnterApp = async () => {
     const raw = localStorage.getItem("nice_invest_session");
-    if (!raw) return;
+    if (!raw) {
+      setCurrentPage("login");
+      return;
+    }
+
     try {
       const data = JSON.parse(raw);
       if (data.session_token) {
-        checkSession(data.session_token).then((res) => {
-          if (res.valid) {
-            setCurrentPage("dashboard");
-          } else {
-            clearSession();
-          }
-        });
+        const res = await checkSession(data.session_token);
+        if (res.valid) {
+          setCurrentPage("dashboard");
+          return;
+        }
       }
+
+      clearSession();
     } catch {
       clearSession();
     }
-  }, []);
 
-  const handleEnterApp = () => setCurrentPage("login");
+    setCurrentPage("login");
+  };
 
   const handleLoginSuccess = (_email: string) => {
     setCurrentPage("dashboard");
@@ -72,8 +75,10 @@ export default function App() {
       {currentPage === "login" && (
         <Login onBack={handleBackToLandingFromLogin} onLoginSuccess={handleLoginSuccess} />
       )}
-      {currentPage === "dashboard" && (
-        <Dashboard onViewReport={handleViewReport} onLogout={handleLogout} />
+      {(currentPage === "dashboard" || currentPage === "report") && (
+        <div className={currentPage === "dashboard" ? "h-full" : "hidden"}>
+          <Dashboard onViewReport={handleViewReport} onLogout={handleLogout} />
+        </div>
       )}
       {currentPage === "report" && (
         <Report

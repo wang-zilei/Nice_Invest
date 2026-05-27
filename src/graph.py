@@ -30,6 +30,9 @@ except ImportError:
 LLM_TIMEOUT = 60  # 单次 LLM 请求超时（秒）
 AGENT_TIMEOUT = 180  # 单个 Agent 整体执行超时（秒）
 
+# MCP 模式开关：'function_call'（默认，零风险）| 'embedded'（stdio）| 'sse'（HTTP）
+MCP_MODE = os.environ.get("MCP_MODE", "function_call")
+
 
 def get_llm(model: str = None):
     """根据模型名称创建 LLM 实例（OpenAI 兼容协议）
@@ -455,9 +458,15 @@ def build_graph():
 
 
 def _run_agent(agent_type: str, state: AnalysisState) -> AnalysisState:
-    """Agent 执行节点的包装器"""
+    """Agent 执行节点的包装器（支持 Function Call / MCP 双模式）"""
     stock_code = state.get("stock_code", "")
-    analysis = run_agent_react(agent_type, state)
+
+    # 根据 MCP_MODE 环境变量选择执行路径
+    if MCP_MODE == "function_call":
+        analysis = run_agent_react(agent_type, state)
+    else:
+        from src.mcp_integration.mcp_react import run_agent_mcp
+        analysis = run_agent_mcp(agent_type, state, mode=MCP_MODE)
 
     # 解析置信度（简单从文本中提取）
     confidence = 0.8  # 默认值

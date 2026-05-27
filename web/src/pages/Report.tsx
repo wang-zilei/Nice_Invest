@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, Shield, AlertTriangle, Printer, AlertCircle } from "lucide-react";
+import { ArrowLeft, Printer, AlertCircle } from "lucide-react";
 import { cleanAnalysisText, parseJsonFromText } from "@/src/lib/api";
 import type { AnalysisResult } from "@/src/App";
 import type { ReportData } from "@/src/lib/api";
@@ -18,15 +18,19 @@ export default function Report({ result, onBack }: ReportProps) {
     );
   }
 
-  const { stockCode, stockName, verdict, reportData, agents, summaryText } = result;
+  const { stockCode, stockName, reportData, agents, summaryText } = result;
 
   // 股票名称回退到代码
   const displayName = stockName || stockCode;
 
   // 清洗后的 summary 文本
   const cleanedSummary = cleanAnalysisText(summaryText || "");
-  // 去除 JSON 块的纯文本
-  const summaryMarkdown = cleanedSummary.replace(/```json\s*\n[\s\S]*?\n```/g, "").trim();
+  // 去除 JSON 块和模型过程性提示，避免报告正文顶部留下空白段落
+  const summaryMarkdown = cleanedSummary
+    .replace(/```json\s*\n[\s\S]*?\n```/g, "")
+    .replace(/^\s*现在我已掌握所有交叉验证结果和综合评分，开始撰写完整报告。\s*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   // 从 summaryText 或 reportData 中提取结构化数据
   const parsedFromText = parseJsonFromText(summaryText || "");
@@ -34,28 +38,11 @@ export default function Report({ result, onBack }: ReportProps) {
 
   // 从 effectiveReportData 或 agents 中提取数据
   const scores = effectiveReportData?.scores || extractScores(agents);
-  const risks = effectiveReportData?.risks || [];
   const scenarios = effectiveReportData?.scenarios;
   const crossAnalysis = effectiveReportData?.cross_analysis || [];
-  const verdictData = effectiveReportData?.verdict || {
-    direction: verdict,
-    confidence: "medium",
-    weighted_score: scores.weighted_total || 0,
-    recommendation_level: "数据不足",
-  };
-
   // 检测是否缺乏数据
   const hasAnyScore = scores.fundamental > 0 || scores.technical > 0 ||
     scores.valuation > 0 || scores.news > 0;
-
-  const directionIcon =
-    verdictData.direction === "看好" ? (
-      <TrendingUp className="w-6 h-6 text-[#eb5e28]" />
-    ) : verdictData.direction === "看空" ? (
-      <TrendingDown className="w-6 h-6 text-[#8B4513]" />
-    ) : (
-      <Minus className="w-6 h-6 text-[#403d39]" />
-    );
 
   return (
     <div className="w-full h-screen overflow-auto bg-[#fffcf2] text-[#252422] font-sans">
@@ -88,12 +75,6 @@ export default function Report({ result, onBack }: ReportProps) {
       <main className="w-full px-8 lg:px-12 py-10">
         {/* 标题区 */}
         <section className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            {directionIcon}
-            <span className="text-[16px] font-semibold text-[#403d39] tracking-wider uppercase">
-              {verdictData.recommendation_level || "数据不足 · 无法评估"}
-            </span>
-          </div>
           <h1 className="text-[36px] font-serif font-bold text-[#252422] mb-2 leading-tight">
             {displayName}
           </h1>
@@ -228,51 +209,6 @@ export default function Report({ result, onBack }: ReportProps) {
           </>
         )}
 
-        {/* 风险清单 */}
-        {risks.length > 0 ? (
-          <section className="mb-8">
-            <h2 className="text-[15px] font-semibold text-[#403d39]/60 uppercase tracking-wider mb-5 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              风险清单
-            </h2>
-            <div className="space-y-3">
-              {risks.map((r, i) => (
-                <div
-                  key={i}
-                  className="p-4 bg-white border border-[#ccc5b9]/30 rounded-lg flex items-start gap-4"
-                >
-                  <span className="text-[14px] font-mono text-[#403d39]/40 mt-0.5">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[16px] text-[#252422] font-medium mb-2">{r.description}</p>
-                    <div className="flex gap-3">
-                      <RiskBadge label="影响" value={r.impact} />
-                      <RiskBadge label="概率" value={r.probability} />
-                    </div>
-                    {r.mitigation && (
-                      <p className="mt-2 text-[15px] text-[#403d39]/60 flex items-center gap-1.5 tracking-wide">
-                        <Shield className="w-3.5 h-3.5" />
-                        {r.mitigation}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <section className="mb-8">
-            <h2 className="text-[15px] font-semibold text-[#403d39]/60 uppercase tracking-wider mb-5 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              风险清单
-            </h2>
-            <p className="text-[16px] text-[#403d39]/50 text-center py-6">
-              暂无风险分析数据
-            </p>
-          </section>
-        )}
-
         {/* 页脚 */}
         <footer className="mt-16 pt-8 border-t border-[#ccc5b9]/30 text-center">
           <p className="text-[14px] text-[#403d39]/30 font-serif">
@@ -376,23 +312,6 @@ function ScenarioCard({
         </div>
       )}
     </div>
-  );
-}
-
-// ============================================================
-// 风险标签
-// ============================================================
-function RiskBadge({ label, value }: { label: string; value?: string }) {
-  const tagStyle =
-    value === "high"
-      ? "bg-[#403d39]/10 text-[#403d39]"
-      : value === "medium"
-      ? "bg-[#ccc5b9]/20 text-[#403d39]/80"
-      : "bg-[#ccc5b9]/10 text-[#403d39]/50";
-  return (
-    <span className={`text-[13px] px-2 py-0.5 rounded-full font-medium ${tagStyle}`}>
-      {label}: {value || "?"}
-    </span>
   );
 }
 

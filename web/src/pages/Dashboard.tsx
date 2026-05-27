@@ -28,6 +28,40 @@ const iconMap: Record<string, React.ReactNode> = {
   BrainCircuit: <BookOpen className="w-5 h-5" />,
 };
 
+function NiceInvestMark({
+  className = "",
+  strokeWidth = 3,
+}: {
+  className?: string;
+  strokeWidth?: number;
+}) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      stroke="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="8" y="31" width="4.5" height="8" rx="1.2" fill="currentColor" stroke="none" opacity="0.82" />
+      <rect x="19" y="26" width="4.5" height="13" rx="1.2" fill="currentColor" stroke="none" opacity="0.72" />
+      <rect x="30" y="20" width="4.5" height="19" rx="1.2" fill="currentColor" stroke="none" opacity="0.62" />
+      <path
+        d="M8 24.5 L17 17.5 L25.5 21.5 L40 8"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M31 8 H40 V17"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const STORAGE_KEY = "nice_invest_config";
 
 function loadConfig(): { llm: LLMConfig } {
@@ -573,7 +607,7 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
         style={{ minHeight: "100px", paddingTop: "14px", paddingBottom: "14px" }}
       >
         <div className="flex items-center gap-2.5 shrink-0">
-          <BookOpen className="w-5 h-5 text-[#403d39]" />
+          <NiceInvestMark className="w-7 h-7 text-[#eb5e28]" strokeWidth={3.1} />
           <span className="text-[22px] font-serif font-bold tracking-wide italic text-[#252422]">
             Nice Invest
           </span>
@@ -663,7 +697,7 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
       {/* Main — 股票信息 + Agent 网格 */}
       <div className="flex-1 flex flex-col overflow-hidden px-10 pb-10 pt-6">
         {/* 股票信息区 / 欢迎语 */}
-        <div className="shrink-0 mb-6 w-full max-w-[1200px] mx-auto text-left px-4 lg:px-8">
+        <div className="shrink-0 mb-4 w-full text-left px-1 lg:mb-2 lg:px-0">
           {isPlaceholder ? (
             <div>
               <span className="text-[13px] font-serif font-semibold text-[#403d39]/60 tracking-wider uppercase mb-2 block">
@@ -671,7 +705,7 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
               </span>
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-[36px] font-tech font-extrabold text-[#252422] leading-tight mb-1 tracking-tight">
+                  <h1 className="text-[26px] font-tech font-extrabold text-[#252422] leading-tight mb-1 tracking-tight lg:text-[30px]">
                     {displayData.name}
                   </h1>
                   {userEmail && userEmail !== "guest@niceinvest.dev" && (
@@ -690,7 +724,7 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
               </span>
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-[36px] font-tech font-extrabold text-[#252422] leading-tight mb-1 tracking-tight">
+                  <h1 className="text-[26px] font-tech font-extrabold text-[#252422] leading-tight mb-1 tracking-tight lg:text-[30px]">
                     {displayData.name}{" "}
                     <span className="font-medium text-[#403d39]/40">({displayData.symbol})</span>
                   </h1>
@@ -749,41 +783,48 @@ export default function Dashboard({ onViewReport, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* Agent Grid — 紧凑布局，防止底部 Agent 顶到边缘 */}
-        <div className="flex-1 w-full mx-auto relative flex items-center justify-center max-w-[1400px]" style={{ minHeight: 0 }}>
-          {/* 装饰光晕 */}
-          <div className="absolute top-[15%] left-[20%] w-[300px] h-[300px] bg-[#ccc5b9]/8 rounded-full blur-[120px] pointer-events-none" />
-          <div className="absolute bottom-[15%] right-[20%] w-[400px] h-[400px] bg-[#403d39]/4 rounded-full blur-[120px] pointer-events-none" />
+        {/* Agent Grid - visual network */}
+        <div className="flex-1 w-full mx-auto relative flex items-center justify-center max-w-[1540px] overflow-y-auto lg:overflow-visible" style={{ minHeight: 0 }}>
+          <div className="absolute inset-0 hidden pointer-events-none lg:block">
+            <div className="absolute left-1/2 top-1/2 h-[780px] w-[780px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#ccc5b9]/15" />
+          </div>
 
-          <div className="w-full h-full relative grid grid-cols-[1fr_auto_1fr] gap-x-10 gap-y-0 items-center justify-items-center"
-            style={{ gridTemplateRows: "1fr auto 0.85fr" }}
-          >
-            {/* SVG 连线 */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-              <path d="M 50% 26% V 36% H 46% V 50%" stroke="#ccc5b9" strokeWidth="1.5" fill="none" strokeLinecap="square" />
-              <path d="M 18% 50% H 32% V 38% H 50%" stroke="#ccc5b9" strokeWidth="1.5" fill="none" strokeLinecap="square" />
-              <path d="M 82% 50% H 68% V 38% H 50%" stroke="#ccc5b9" strokeWidth="1.5" fill="none" strokeLinecap="square" />
-              <path d="M 50% 68% V 62% H 46% V 50%" stroke="#ccc5b9" strokeWidth="1.5" fill="none" strokeLinecap="square" />
+          <div className="relative grid w-full grid-cols-1 gap-4 py-2 lg:block lg:aspect-[1400/760] lg:h-auto lg:max-h-full lg:max-w-[1400px] lg:py-0">
+            <svg className="absolute inset-0 z-0 hidden h-full w-full pointer-events-none lg:block" viewBox="0 0 1400 760" preserveAspectRatio="none">
+              <defs>
+                <filter id="dotGlow" x="-80%" y="-80%" width="260%" height="260%">
+                  <feGaussianBlur stdDeviation="3.2" />
+                </filter>
+              </defs>
+
+              {[
+                [700, 378, 5.8, 0.60], [676, 356, 3.2, 0.34], [724, 352, 3.8, 0.42], [686, 404, 2.4, 0.30], [728, 410, 2.8, 0.36],
+                [690, 252, 4.2, 0.54], [638, 210, 2.6, 0.34], [596, 188, 1.9, 0.24], [742, 222, 2.9, 0.36], [802, 194, 2.2, 0.28], [868, 168, 1.6, 0.20],
+                [565, 352, 4.6, 0.55], [538, 330, 3.0, 0.38], [508, 314, 2.2, 0.26], [480, 300, 1.7, 0.22], [565, 392, 3.8, 0.48], [532, 414, 2.6, 0.32], [498, 438, 3.2, 0.38], [466, 454, 2.0, 0.24], [502, 372, 5.0, 0.44], [458, 372, 2.8, 0.30],
+                [835, 352, 4.6, 0.55], [862, 330, 3.0, 0.38], [892, 314, 2.2, 0.26], [920, 300, 1.7, 0.22], [835, 392, 3.8, 0.48], [868, 414, 2.6, 0.32], [902, 438, 3.2, 0.38], [934, 454, 2.0, 0.24], [898, 372, 5.0, 0.44], [942, 372, 2.8, 0.30],
+                [710, 502, 4.2, 0.54], [642, 546, 2.8, 0.34], [596, 574, 1.8, 0.22], [742, 530, 3.0, 0.36], [806, 560, 2.2, 0.26], [868, 592, 1.7, 0.22],
+                [620, 382, 2.1, 0.28], [650, 370, 3.1, 0.35], [754, 370, 3.2, 0.35], [782, 386, 2.0, 0.27]
+              ].map(([cx, cy, r, opacity], i) => (
+                <g key={`dot-${i}`}>
+                  <circle cx={cx} cy={cy} r={r + 6} fill="#eb5e28" opacity={opacity * 0.16} filter="url(#dotGlow)" />
+                  <circle cx={cx} cy={cy} r={r} fill="#eb5e28" opacity={opacity} />
+                </g>
+              ))}
             </svg>
 
-            {/* Row 1: 基本面 */}
-            <div className="col-start-2 row-start-1 z-10 w-full flex justify-center translate-y-6">
+            <div className="relative z-10 w-full lg:absolute lg:left-1/2 lg:top-[0%] lg:w-[380px] lg:-translate-x-1/2">
               <AgentCard agent={displayData.agents[0]} onClick={() => setModalAgent(displayData.agents[0])} />
             </div>
-
-            {/* Row 2: 技术面 · 核心 · 估值 */}
-            <div className="col-start-1 row-start-2 z-10 w-full flex justify-end translate-x-4">
+            <div className="relative z-10 w-full lg:absolute lg:left-[7%] lg:top-[38%] lg:w-[360px]">
               <AgentCard agent={displayData.agents[1]} onClick={() => setModalAgent(displayData.agents[1])} />
             </div>
-            <div className="col-start-2 row-start-2 z-20 relative">
+            <div className="relative z-20 w-full lg:absolute lg:left-1/2 lg:top-[33%] lg:w-[270px] lg:-translate-x-1/2">
               <CenterCore reportAgent={displayData.reportAgent} phase={phase} onClick={() => setModalAgent(displayData.reportAgent)} />
             </div>
-            <div className="col-start-3 row-start-2 z-10 w-full flex justify-start -translate-x-4">
+            <div className="relative z-10 w-full lg:absolute lg:right-[7%] lg:top-[38%] lg:w-[360px]">
               <AgentCard agent={displayData.agents[2]} onClick={() => setModalAgent(displayData.agents[2])} />
             </div>
-
-            {/* Row 3: 新闻（原来是 row 3 1fr 撑到底部，现在设为 0.85fr，位置上移） */}
-            <div className="col-start-2 row-start-3 z-10 w-full flex justify-center -translate-y-2">
+            <div className="relative z-10 w-full lg:absolute lg:left-1/2 lg:bottom-[0%] lg:w-[380px] lg:-translate-x-1/2">
               <AgentCard agent={displayData.agents[3]} onClick={() => setModalAgent(displayData.agents[3])} />
             </div>
           </div>
@@ -832,18 +873,18 @@ function AgentCard({ agent, onClick }: { agent: AgentTask; onClick?: () => void 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
-      className="bg-white rounded-2xl p-5 md:p-7 border border-[#ccc5b9]/40 shadow-[0_4px_24px_rgba(37,36,34,0.04)] w-full max-w-[420px] relative group cursor-pointer"
+      className="bg-white/92 backdrop-blur-sm rounded-2xl p-4 md:p-5 border border-[#ccc5b9]/45 shadow-[0_14px_42px_rgba(37,36,34,0.07)] w-full relative group cursor-pointer"
       onClick={onClick}
     >
       <div className="flex items-start gap-4">
-        <div className="shrink-0 w-11 h-11 bg-[#fffcf2] border border-[#ccc5b9]/40 rounded-2xl flex items-center justify-center text-[#403d39]">
+        <div className="shrink-0 w-11 h-11 bg-[#fffcf2] border border-[#ccc5b9]/45 rounded-xl flex items-center justify-center text-[#403d39] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
           {iconMap[agent.icon] || <FileText className="w-5 h-5" />}
         </div>
         <div className="flex-1 min-w-0 pt-0.5">
           <h3 className="text-[17px] font-tech font-bold text-[#252422] mb-2 break-words">
             {agent.name}
           </h3>
-          <p className="text-[13px] text-[#403d39]/60 font-serif leading-relaxed mb-5">
+          <p className="text-[13px] text-[#403d39]/58 font-serif leading-relaxed mb-4">
             {agent.description}
           </p>
         </div>
@@ -897,51 +938,53 @@ function CenterCore({
   onClick?: () => void;
 }) {
   return (
-    <div className="relative flex flex-col items-center justify-center cursor-pointer" onClick={onClick}>
-      <div className="absolute inset-[-30px] border border-[#ccc5b9]/30 rounded-full drop-shadow-sm opacity-50" />
-      <div className="absolute inset-[-60px] border border-[#ccc5b9]/15 rounded-full opacity-30" />
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.45 }}
+      className="relative cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="absolute inset-[-86px] hidden rounded-full border border-[#eb5e28]/12 lg:block" />
+      <div className="absolute inset-[-48px] hidden rounded-full border border-[#eb5e28]/18 border-dashed lg:block" />
+      <div className="absolute inset-[-24px] rounded-[2rem] bg-[#eb5e28]/8 blur-[36px]" />
 
-      <div className="relative w-[110px] h-[130px] bg-[#252422] border border-[#403d39] rounded-2xl shadow-[0_8px_30px_rgba(37,36,34,0.2)] flex flex-col items-center pt-5 pb-3 px-5 z-10 overflow-hidden">
-        <div className="w-full flex items-center justify-between mb-4 px-1">
-          <BookOpen className="w-5 h-5 text-[#fffcf2]" />
-          <div className="flex gap-1">
-            {[0, 0.2, 0.4].map((delay, i) => (
+      <div className="relative z-10 w-full rounded-[1.75rem] border border-[#eb5e28]/42 bg-white/94 p-5 shadow-[0_20px_55px_rgba(235,94,40,0.13)] backdrop-blur-sm">
+        <div className="mb-4 flex justify-center text-[#eb5e28]">
+          <NiceInvestMark className="h-14 w-14" strokeWidth={3.0} />
+        </div>
+        <h3 className="mb-3 text-center text-[18px] font-tech font-bold text-[#252422]">
+          {reportAgent.name}
+        </h3>
+        <p className="mb-5 text-center font-serif text-[13px] leading-relaxed text-[#403d39]/62">
+          {reportAgent.description}
+        </p>
+        <div className="flex items-center justify-between border-t border-[#ccc5b9]/24 pt-3">
+          <div className="flex items-center gap-2">
+            {phase === "analyzing" ? (
               <motion.div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-[#403d39]"
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay }}
-              />
-            ))}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <Loader2 className="h-4 w-4 text-[#eb5e28]" />
+              </motion.div>
+            ) : reportAgent.status === "completed" ? (
+              <CheckCircle className="h-4 w-4 text-[#eb5e28]" />
+            ) : reportAgent.status === "error" ? (
+              <AlertCircle className="h-4 w-4 text-red-500" />
+            ) : null}
+            <span className="text-[12px] font-medium text-[#403d39]">
+              {reportAgent.shortDesc}
+            </span>
           </div>
-        </div>
-
-        <div className="w-full flex flex-col gap-2.5 px-1 flex-1">
-          {[0, 0.3, 0.6].map((delay, i) => (
-            <motion.div
-              key={i}
-              className={`h-[3px] bg-[#403d39] rounded-full relative overflow-hidden ${
-                i === 0 ? "w-full" : i === 1 ? "w-[85%]" : "w-[60%]"
-              }`}
-            >
-              {phase === "analyzing" && (
-                <motion.div
-                  className="absolute inset-y-0 left-0 bg-[#ccc5b9] rounded-full"
-                  animate={{ width: ["0%", "100%", "100%"] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "circInOut", delay }}
-                />
-              )}
-            </motion.div>
-          ))}
-        </div>
-
-        <div className="w-full mt-auto flex items-center justify-center">
-          <span className="text-[10px] font-bold tracking-[0.15em] text-[#ccc5b9] uppercase">
-            {reportAgent.status === "completed" ? "报告就绪" : "撰写总结中"}
-          </span>
+          {reportAgent.confidence && reportAgent.status === "completed" && (
+            <span className="text-[12px] text-[#403d39]/45">
+              置信度 {(reportAgent.confidence * 100).toFixed(0)}%
+            </span>
+          )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
